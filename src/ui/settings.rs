@@ -2,7 +2,7 @@ use crate::config::{AppConfig, LANGUAGES};
 use crate::ui::state::{SettingsTab, STATE};
 use crate::ui::translate::show_toast;
 
-/// 绘制设置页面
+/// 绘制设置页面（独立 OS 窗口）
 pub fn draw_settings(ctx: &egui::Context) {
     // toast 自动消失
     {
@@ -14,64 +14,67 @@ pub fn draw_settings(ctx: &egui::Context) {
         }
     }
 
-    let mut show = true;
-    egui::Window::new("设置")
-        .open(&mut show)
-        .default_width(640.0)
-        .default_height(480.0)
-        .min_width(500.0)
-        .min_height(360.0)
-        .resizable(true)
-        .collapsible(false)
-        .show(ctx, |ui| {
-            ui.horizontal_top(|ui| {
-                // ── 左侧菜单 ──
-                let menu_w = 140.0;
-                ui.vertical(|ui| {
-                    ui.set_min_width(menu_w);
-                    ui.add_space(4.0);
+    ctx.show_viewport_immediate(
+        egui::ViewportId::from_hash_of("settings"),
+        egui::ViewportBuilder::default()
+            .with_title("设置")
+            .with_inner_size([640.0, 480.0])
+            .with_min_inner_size([500.0, 360.0]),
+        |ctx, _class| {
+            // 关闭按钮 → 隐藏设置窗口
+            if ctx.input(|i| i.viewport().close_requested()) {
+                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+                crate::ui::state::hide_settings_window();
+                return;
+            }
 
-                    let mut tab = STATE.lock().unwrap().settings_tab;
-                    let tabs = [
-                        (SettingsTab::General, "常规设置"),
-                        (SettingsTab::Engines, "翻译服务"),
-                        (SettingsTab::About, "关于"),
-                    ];
-                    for (t, label) in tabs {
-                        ui.selectable_value(&mut tab, t, label);
-                    }
-                    STATE.lock().unwrap().settings_tab = tab;
+            egui::CentralPanel::default().show(ctx, |ui| {
+                ui.horizontal_top(|ui| {
+                    // ── 左侧菜单 ──
+                    let menu_w = 140.0;
+                    ui.vertical(|ui| {
+                        ui.set_min_width(menu_w);
+                        ui.add_space(4.0);
+
+                        let mut tab = STATE.lock().unwrap().settings_tab;
+                        let tabs = [
+                            (SettingsTab::General, "常规设置"),
+                            (SettingsTab::Engines, "翻译服务"),
+                            (SettingsTab::About, "关于"),
+                        ];
+                        for (t, label) in tabs {
+                            ui.selectable_value(&mut tab, t, label);
+                        }
+                        STATE.lock().unwrap().settings_tab = tab;
+                    });
+
+                    ui.separator();
+
+                    // ── 右侧详情 ──
+                    let detail_w = ui.available_width();
+                    let detail_h = ui.available_height();
+                    ui.allocate_ui_with_layout(
+                        egui::vec2(detail_w, detail_h),
+                        egui::Layout::top_down(egui::Align::LEFT),
+                        |ui| {
+                            egui::ScrollArea::vertical()
+                                .auto_shrink([false; 2])
+                                .show(ui, |ui| {
+                                    ui.add_space(4.0);
+                                    ui.set_min_width(detail_w - 20.0);
+                                    let tab = STATE.lock().unwrap().settings_tab;
+                                    match tab {
+                                        SettingsTab::General => settings_general(ui),
+                                        SettingsTab::Engines => settings_engines(ui),
+                                        SettingsTab::About => settings_about(ui),
+                                    }
+                                });
+                        },
+                    );
                 });
-
-                ui.separator();
-
-                // ── 右侧详情 ──
-                let detail_w = ui.available_width();
-                let detail_h = ui.available_height();
-                ui.allocate_ui_with_layout(
-                    egui::vec2(detail_w, detail_h),
-                    egui::Layout::top_down(egui::Align::LEFT),
-                    |ui| {
-                        egui::ScrollArea::vertical()
-                            .auto_shrink([false; 2])
-                            .show(ui, |ui| {
-                                ui.add_space(4.0);
-                                ui.set_min_width(detail_w - 20.0);
-                                let tab = STATE.lock().unwrap().settings_tab;
-                                match tab {
-                                    SettingsTab::General => settings_general(ui),
-                                    SettingsTab::Engines => settings_engines(ui),
-                                    SettingsTab::About => settings_about(ui),
-                                }
-                            });
-                    },
-                );
             });
-        });
-
-    if !show {
-        crate::ui::state::hide_settings_window();
-    }
+        },
+    );
 }
 
 // ── 常规设置 ──

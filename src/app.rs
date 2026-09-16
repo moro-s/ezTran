@@ -3,7 +3,6 @@ use crate::icon;
 use crate::theme;
 use crate::ui;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Duration, Instant};
 use tray_icon::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use tray_icon::{TrayIcon, TrayIconBuilder, TrayIconEvent};
 
@@ -18,32 +17,27 @@ static PENDING_MENU_EVENTS: std::sync::LazyLock<std::sync::Mutex<Vec<MenuEvent>>
 /// 托盘图标点击产生的动作
 enum TrayAction {
     ShowTranslate,
-    ShowSettings,
 }
 
 static PENDING_TRAY_ACTIONS: std::sync::LazyLock<std::sync::Mutex<Vec<TrayAction>>> =
     std::sync::LazyLock::new(|| std::sync::Mutex::new(Vec::new()));
 
-/// 上次单击时间（用于区分单击/双击）
-static LAST_CLICK_TIME: std::sync::LazyLock<std::sync::Mutex<Option<Instant>>> =
-    std::sync::LazyLock::new(|| std::sync::Mutex::new(None));
-
-/// 是否有待确认的单击（延迟窗口内未收到双击则执行）
-static PENDING_SINGLE_CLICK: AtomicBool = AtomicBool::new(false);
-
-/// 下一帧需要隐藏窗口（最小化到托盘）
+/// 下一帧需要隐藏窗口
 static PENDING_HIDE: AtomicBool = AtomicBool::new(false);
+
+/// 窗口当前是否已隐藏
+static WINDOW_HIDDEN: AtomicBool = AtomicBool::new(false);
 
 /// 圆角是否已设置（仅执行一次）
 #[cfg(windows)]
 static ROUND_CORNERS_SET: AtomicBool = AtomicBool::new(false);
 
-const DOUBLE_CLICK_THRESHOLD: Duration = Duration::from_millis(350);
-
 fn wake_event_loop() {
     if let Some(ctx) = EGUI_CTX.lock().unwrap().as_ref() {
         ctx.request_repaint();
     }
+    #[cfg(windows)]
+    post_wakeup();
 }
 
 pub struct EzTranApp {
@@ -82,43 +76,21 @@ impl EzTranApp {
         // 托盘菜单事件
         MenuEvent::set_event_handler(Some(|event: MenuEvent| {
             PENDING_MENU_EVENTS.lock().unwrap().push(event);
+            #[cfg(windows)]
+            restore_window_if_hidden();
             wake_event_loop();
         }));
 
-        // 托盘图标点击事件：单击 → 翻译工作台，双击 → 设置
+        // 托盘图标点击事件：双击 → 恢复窗口并显示翻译工作台
         TrayIconEvent::set_event_handler(Some(|event: TrayIconEvent| {
-            match event {
-                TrayIconEvent::Click { .. } => {
-                    let now = Instant::now();
-                    let mut last = LAST_CLICK_TIME.lock().unwrap();
-                    if let Some(prev) = *last {
-                        if now.duration_since(prev) < DOUBLE_CLICK_THRESHOLD {
-                            *last = Some(now);
-                            return;
-                        }
-                    }
-                    *last = Some(now);
-                    PENDING_SINGLE_CLICK.store(true, Ordering::SeqCst);
-                    std::thread::spawn(|| {
-                        std::thread::sleep(DOUBLE_CLICK_THRESHOLD);
-                        if PENDING_SINGLE_CLICK.swap(false, Ordering::SeqCst) {
-                            PENDING_TRAY_ACTIONS
-                                .lock()
-                                .unwrap()
-                                .push(TrayAction::ShowTranslate);
-                            wake_event_loop();
-                        }
-                    });
-                }
-                TrayIconEvent::DoubleClick { .. } => {
-                    PENDING_SINGLE_CLICK.store(false, Ordering::SeqCst);
-                    PENDING_TRAY_ACTIONS
-                        .lock()
-                        .unwrap()
-                        .push(TrayAction::ShowSettings);
-                    wake_event_loop();
-                }
-                _ => {}
+            if let TrayIconEvent::DoubleClick { .. } = event {
+                #[cfg(windows)]
+                restore_window_if_hidden();
+                PENDING_TRAY_ACTIONS
+                    .lock()
+                    .unwrap()
+                    .push(TrayAction::ShowTranslate);
+                wake_event_loop();
             }
         }));
 
@@ -134,7 +106,7 @@ impl EzTranApp {
     }
 }
 
-/// 后台守护线程：定期 request_repaint，防止窗口最小化/隐藏后事件循环暂停
+/// 后台守护线程：定期 request_repaint + PostMessage，防止窗口隐藏后事件循环暂停
 fn start_repaint_thread() {
     std::thread::spawn(|| {
         loop {
@@ -142,6 +114,8 @@ fn start_repaint_thread() {
             if let Some(ctx) = EGUI_CTX.lock().unwrap().as_ref() {
                 ctx.request_repaint();
             }
+            #[cfg(windows)]
+            post_wakeup();
         }
     });
 }
@@ -163,7 +137,6 @@ impl eframe::App for EzTranApp {
         for action in tray_actions {
             match action {
                 TrayAction::ShowTranslate => show_window(ctx),
-                TrayAction::ShowSettings => ui::show_settings_window(),
             }
         }
 
@@ -184,28 +157,43 @@ impl eframe::App for EzTranApp {
             std::process::exit(0);
         }
 
-        // 3. 主窗口关闭按钮 → 最小化到托盘
+        // 3. Alt+F4 → 隐藏到托盘（无边框窗口无系统关闭按钮，此为后备）
         if ctx.input(|i| i.viewport().close_requested()) {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
-            PENDING_HIDE.store(true, Ordering::SeqCst);
+            if !WINDOW_HIDDEN.load(Ordering::SeqCst) {
+                PENDING_HIDE.store(true, Ordering::SeqCst);
+            }
+        }
+
+        // 4. 设置窗口（独立视口，主窗口隐藏时也需渲染）
+        if ui::is_settings_visible() {
+            ui::draw_settings(ctx);
         }
 
         if PENDING_HIDE.load(Ordering::SeqCst) {
             PENDING_HIDE.store(false, Ordering::SeqCst);
-            ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+            #[cfg(windows)]
+            win_show_window(SW_HIDE);
+            WINDOW_HIDDEN.store(true, Ordering::SeqCst);
             return;
         }
 
-        // 4. 绘制自绘标题栏
+        // 窗口隐藏后事件循环仍被后台线程唤醒，跳过主窗口绘制
+        if WINDOW_HIDDEN.load(Ordering::SeqCst) {
+            return;
+        }
+
+        // 窗口尺寸未就绪时跳过绘制（首帧或最小化时可用区域为 0）
+        let screen = ctx.screen_rect();
+        if screen.height() < 80.0 || screen.width() < 10.0 {
+            return;
+        }
+
+        // 5. 绘制自绘标题栏
         draw_titlebar(ctx);
 
-        // 5. 绘制翻译工作台
+        // 6. 绘制翻译工作台
         ui::draw_translate(ctx);
-
-        // 6. 设置窗口（主窗口内的浮动面板）
-        if ui::is_settings_visible() {
-            ui::draw_settings(ctx);
-        }
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
@@ -213,8 +201,23 @@ impl eframe::App for EzTranApp {
     }
 }
 
-fn show_window(ctx: &egui::Context) {
-    ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(false));
+fn show_window(_ctx: &egui::Context) {
+    #[cfg(windows)]
+    {
+        win_show_window(SW_RESTORE);
+        win_show_window(SW_SHOW);
+    }
+    WINDOW_HIDDEN.store(false, Ordering::SeqCst);
+}
+
+/// 窗口被 SW_HIDE 隐藏后 winit 事件循环暂停，update 不会被调用。
+/// 托盘事件中先用 Win32 API 直接恢复窗口，绕过事件循环。
+#[cfg(windows)]
+fn restore_window_if_hidden() {
+    if WINDOW_HIDDEN.swap(false, Ordering::SeqCst) {
+        win_show_window(SW_RESTORE);
+        win_show_window(SW_SHOW);
+    }
 }
 
 /// Windows: 按标题查找窗口句柄
@@ -276,6 +279,48 @@ fn start_drag_window() {
     }
 }
 
+/// Windows: 向窗口发送 WM_NULL 唤醒 winit 事件循环（窗口隐藏后 request_repaint 无效）
+#[cfg(windows)]
+fn post_wakeup() {
+    use std::ffi::c_void;
+    const WM_NULL: u32 = 0x0000;
+    extern "system" {
+        fn PostMessageW(hwnd: *mut c_void, msg: u32, wparam: usize, lparam: isize) -> i32;
+    }
+    unsafe {
+        let hwnd = find_hwnd();
+        if !hwnd.is_null() {
+            PostMessageW(hwnd, WM_NULL, 0, 0);
+        }
+    }
+}
+
+/// Windows: 通过 ShowWindow 直接控制窗口显示状态
+/// 无边框窗口下 eframe 的 ViewportCommand 不可靠，直接用 Win32 API
+#[cfg(windows)]
+fn win_show_window(cmd: i32) {
+    use std::ffi::c_void;
+    extern "system" {
+        fn ShowWindow(hwnd: *mut c_void, cmd: i32) -> i32;
+    }
+    unsafe {
+        let hwnd = find_hwnd();
+        if !hwnd.is_null() {
+            ShowWindow(hwnd, cmd);
+        }
+    }
+}
+
+// ShowWindow 命令常量
+#[cfg(windows)]
+const SW_HIDE: i32 = 0;
+#[cfg(windows)]
+const SW_SHOW: i32 = 5;
+#[cfg(windows)]
+const SW_MINIMIZE: i32 = 6;
+#[cfg(windows)]
+const SW_RESTORE: i32 = 9;
+
 /// 绘制自绘标题栏（最小化 / 最大化 / 关闭）
 fn draw_titlebar(ctx: &egui::Context) {
     let titlebar_bg = egui::Color32::from_rgb(37, 37, 38);
@@ -332,7 +377,8 @@ fn draw_titlebar(ctx: &egui::Context) {
                 // 最小化
                 let min_resp = titlebar_button(ui, "\u{2014}", egui::Color32::from_rgb(60, 60, 60));
                 if min_resp.clicked() {
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
+                    #[cfg(windows)]
+                    win_show_window(SW_MINIMIZE);
                 }
 
                 // 最大化/还原
@@ -340,11 +386,36 @@ fn draw_titlebar(ctx: &egui::Context) {
                 let max_icon = if maximized { "\u{2750}" } else { "\u{25A2}" };
                 let max_resp = titlebar_button(ui, max_icon, egui::Color32::from_rgb(60, 60, 60));
                 if max_resp.clicked() {
-                    ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!maximized));
+                    #[cfg(windows)]
+                    {
+                        if maximized {
+                            win_show_window(SW_RESTORE);
+                        } else {
+                            // 用 Win32 SC_MAXIMIZE 最大化
+                            use std::ffi::c_void;
+                            const WM_SYSCOMMAND: u32 = 0x0112;
+                            const SC_MAXIMIZE: usize = 0xF030;
+                            extern "system" {
+                                fn SendMessageW(
+                                    hwnd: *mut c_void,
+                                    msg: u32,
+                                    wparam: usize,
+                                    lparam: isize,
+                                ) -> isize;
+                            }
+                            unsafe {
+                                let hwnd = find_hwnd();
+                                if !hwnd.is_null() {
+                                    SendMessageW(hwnd, WM_SYSCOMMAND, SC_MAXIMIZE, 0);
+                                }
+                            }
+                        }
+                    }
                 }
 
                 // 关闭
-                let close_resp = titlebar_button(ui, "\u{2715}", egui::Color32::from_rgb(232, 17, 35));
+                let close_resp =
+                    titlebar_button(ui, "\u{2715}", egui::Color32::from_rgb(232, 17, 35));
                 if close_resp.clicked() {
                     PENDING_HIDE.store(true, Ordering::SeqCst);
                 }
