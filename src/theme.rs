@@ -107,8 +107,8 @@ pub fn setup_style(ctx: &egui::Context) {
             egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(224, 224, 224));
         vis.widgets.noninteractive.bg_stroke = egui::Stroke::new(0.0_f32, egui::Color32::TRANSPARENT);
         vis.widgets.inactive.bg_stroke = egui::Stroke::new(0.0_f32, egui::Color32::TRANSPARENT);
-        vis.selection.bg_fill = egui::Color32::from_rgb(137, 180, 250);
-        vis.selection.stroke = egui::Stroke::new(1.0_f32, egui::Color32::from_rgb(137, 180, 250));
+        vis.selection.bg_fill = egui::Color32::from_rgba_unmultiplied(128, 128, 128, 128);
+        vis.selection.stroke = egui::Stroke::new(1.0_f32, egui::Color32::from_rgba_unmultiplied(128, 128, 128, 128));
         vis.hyperlink_color = egui::Color32::from_rgb(137, 180, 250);
         ctx.set_visuals(vis);
     });

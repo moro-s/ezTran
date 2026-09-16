@@ -24,28 +24,16 @@ pub fn draw_settings(ctx: &egui::Context) {
                 ui.heading("设置");
                 ui.add_space(8.0);
 
-                let tab = STATE.lock().unwrap().settings_tab;
+                let mut tab = STATE.lock().unwrap().settings_tab;
                 let tabs = [
                     (SettingsTab::General, "常规设置"),
                     (SettingsTab::Engines, "翻译服务"),
                     (SettingsTab::About, "关于"),
                 ];
                 for (t, label) in tabs {
-                    let selected = tab == t;
-                    let resp = ui.add_sized(
-                        [menu_w, 32.0],
-                        egui::Button::new(label)
-                            .fill(if selected {
-                                egui::Color32::from_rgba_unmultiplied(128, 128, 128, 60)
-                            } else {
-                                egui::Color32::TRANSPARENT
-                            })
-                            .wrap(),
-                    );
-                    if resp.clicked() {
-                        STATE.lock().unwrap().settings_tab = t;
-                    }
+                    ui.selectable_value(&mut tab, t, label);
                 }
+                STATE.lock().unwrap().settings_tab = tab;
             });
 
             ui.separator();
@@ -265,26 +253,13 @@ fn settings_engines(ui: &mut egui::Ui) {
                         ui.separator();
 
                         ui.label("类型:");
-                        egui::ComboBox::from_id_salt(format!("engine_kind_{}", i))
-                            .selected_text(kind.label())
-                            .show_ui(ui, |ui| {
-                                for k in crate::translate::EngineKind::all() {
-                                    let mut k_str = format!("{:?}", k);
-                                    ui.selectable_value(
-                                        &mut k_str,
-                                        format!("{:?}", k),
-                                        k.label(),
-                                    );
-                                }
-                            });
-                        let kind_label = kind.label();
-                        let mut s = STATE.lock().unwrap();
-                        s.config_edit.engines.engines[i].kind = match kind_label {
-                            "有道翻译" => crate::translate::EngineKind::Youdao,
-                            "百度翻译" => crate::translate::EngineKind::Baidu,
-                            "DeepL" => crate::translate::EngineKind::DeepL,
-                            _ => crate::translate::EngineKind::Custom,
-                        };
+                        let mut kind_val = kind;
+                        ui.horizontal(|ui| {
+                            for k in crate::translate::EngineKind::all() {
+                                ui.selectable_value(&mut kind_val, k.clone(), k.label());
+                            }
+                        });
+                        STATE.lock().unwrap().config_edit.engines.engines[i].kind = kind_val;
                     });
 
                     // API Key

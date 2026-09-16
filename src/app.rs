@@ -17,6 +17,9 @@ static PENDING_MENU_EVENTS: std::sync::LazyLock<std::sync::Mutex<Vec<MenuEvent>>
 /// 主窗口是否已隐藏（关闭按钮隐藏到托盘）
 static WINDOW_HIDDEN: AtomicBool = AtomicBool::new(false);
 
+/// 下一帧需要隐藏窗口（与 CancelClose 分离到不同帧，避免命令执行顺序问题）
+static PENDING_HIDE: AtomicBool = AtomicBool::new(false);
+
 pub struct EzTranApp {
     _tray: Option<TrayIcon>,
     translate_id: tray_icon::menu::MenuId,
@@ -114,8 +117,17 @@ impl eframe::App for EzTranApp {
         }
 
         // 2. 主窗口关闭按钮 → 隐藏到托盘
+        //    分两帧处理：第一帧仅发送 CancelClose（阻止退出），第二帧发送 Visible(false)（隐藏窗口）
+        //    避免同一帧中 Visible(false) 先执行导致窗口销毁触发 Exit
         if ctx.input(|i| i.viewport().close_requested()) {
             ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            PENDING_HIDE.store(true, Ordering::SeqCst);
+            return;
+        }
+
+        // 上一帧已 CancelClose，本帧安全隐藏窗口
+        if PENDING_HIDE.load(Ordering::SeqCst) {
+            PENDING_HIDE.store(false, Ordering::SeqCst);
             ctx.send_viewport_cmd(egui::ViewportCommand::Visible(false));
             WINDOW_HIDDEN.store(true, Ordering::SeqCst);
             return;
