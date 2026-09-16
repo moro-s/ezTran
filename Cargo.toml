@@ -1,0 +1,28 @@
+[package]
+name = "eztran"
+version = "0.1.0"
+edition = "2021"
+description = "A lightweight desktop translation tool built with egui"
+
+[[bin]]
+name = "eztran"
+path = "src/main.rs"
+
+[dependencies]
+eframe = "0.29"
+egui = "0.29"
+minreq = { version = "2", features = ["https-rustls", "json-using-serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+arboard = "3"
+dirs = "5"
+anyhow = "1"
+thiserror = "2"
+tray-icon = "0.25"
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
