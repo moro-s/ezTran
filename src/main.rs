@@ -17,6 +17,7 @@ fn main() -> eframe::Result {
             .with_inner_size([820.0, 520.0])
             .with_min_inner_size([600.0, 400.0])
             .with_title("EzTran - 翻译")
+            .with_decorations(false)
             .with_icon(std::sync::Arc::new(create_window_icon())),
         ..Default::default()
     };

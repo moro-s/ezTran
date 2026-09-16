@@ -14,5 +14,8 @@ Thumbs.db
 # Environment
 .env
 
+# Debug
+debug.log
+
 # Codegraph
 .codegraph/
