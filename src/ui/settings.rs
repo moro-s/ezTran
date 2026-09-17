@@ -4,7 +4,7 @@ use crate::ui::translate::show_toast;
 
 /// 绘制设置页面（独立 OS 窗口）
 pub fn draw_settings(ctx: &egui::Context) {
-    log::info!("[settings] draw_settings 被调用，创建/更新设置视口");
+    log::debug!("[settings] draw_settings 被调用，创建/更新设置视口");
 
     // toast 自动消失
     {
@@ -238,7 +238,7 @@ fn settings_engines(ui: &mut egui::Ui) {
     ui.add_space(2.0);
     ui.label(
         egui::RichText::new("配置一个或多个翻译引擎，勾选「启用」后可在翻译页选择使用")
-            .color(egui::Color32::from_gray(140))
+            .color(crate::theme::text_hint())
             .small(),
     );
     ui.add_space(8.0);
@@ -386,17 +386,17 @@ fn settings_about(ui: &mut egui::Ui) {
             ui.vertical(|ui| {
                 ui.horizontal(|ui| {
                     ui.label(egui::RichText::new("EzTran").size(22.0).strong());
-                    ui.label(egui::RichText::new("v0.1.0").color(egui::Color32::from_gray(140)));
+                    ui.label(egui::RichText::new("v0.1.0").color(crate::theme::label_secondary()));
                 });
                 ui.add_space(4.0);
                 ui.label(
                     egui::RichText::new("轻量级桌面翻译工具")
-                        .color(egui::Color32::from_gray(160)),
+                        .color(crate::theme::label_secondary()),
                 );
                 ui.add_space(4.0);
                 ui.label(
                     egui::RichText::new("基于 egui + Rust 构建")
-                        .color(egui::Color32::from_gray(120))
+                        .color(crate::theme::text_hint())
                         .small(),
                 );
             });

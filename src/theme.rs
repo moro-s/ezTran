@@ -318,3 +318,194 @@ pub fn setup_style(ctx: &egui::Context) {
     vis.hyperlink_color = egui::Color32::from_rgb(137, 180, 250);
     ctx.set_visuals(vis);
 }
+
+// ── 主题感知颜色 ──
+
+/// 当前是否为浅色主题
+fn is_light() -> bool {
+    let theme = crate::ui::state::STATE.lock().unwrap().config_edit.theme.clone();
+    matches!(theme, crate::config::AppTheme::Light)
+}
+
+/// 标题栏背景色
+pub fn titlebar_bg() -> egui::Color32 {
+    if is_light() {
+        egui::Color32::from_rgb(243, 243, 243)
+    } else {
+        egui::Color32::from_rgb(37, 37, 38)
+    }
+}
+
+/// 标题栏按钮 hover 色
+pub fn titlebar_btn_hover() -> egui::Color32 {
+    if is_light() {
+        egui::Color32::from_rgb(229, 229, 229)
+    } else {
+        egui::Color32::from_rgb(60, 60, 60)
+    }
+}
+
+/// 标题栏按钮文字色
+pub fn titlebar_text() -> egui::Color32 {
+    if is_light() {
+        egui::Color32::from_gray(60)
+    } else {
+        egui::Color32::from_gray(200)
+    }
+}
+
+/// 面板背景色（左右翻译面板）
+pub fn panel_bg() -> egui::Color32 {
+    if is_light() {
+        egui::Color32::from_rgb(255, 255, 255)
+    } else {
+        egui::Color32::from_rgb(30, 30, 30)
+    }
+}
+
+/// 主体内容区背景色
+pub fn central_bg() -> egui::Color32 {
+    if is_light() {
+        egui::Color32::from_rgb(245, 245, 245)
+    } else {
+        egui::Color32::from_rgb(43, 43, 43)
+    }
+}
+
+/// 标签文字色（如"原文""译文"）
+pub fn label_secondary() -> egui::Color32 {
+    if is_light() {
+        egui::Color32::from_rgb(90, 90, 90)
+    } else {
+        egui::Color32::from_rgb(170, 170, 170)
+    }
+}
+
+/// 次要文字色（占位提示）
+pub fn text_hint() -> egui::Color32 {
+    if is_light() {
+        egui::Color32::from_gray(160)
+    } else {
+        egui::Color32::from_gray(90)
+    }
+}
+
+/// 次要文字色（更淡）
+pub fn text_hint_dim() -> egui::Color32 {
+    if is_light() {
+        egui::Color32::from_gray(180)
+    } else {
+        egui::Color32::from_gray(70)
+    }
+}
+
+/// 译文文字色
+pub fn text_translated() -> egui::Color32 {
+    if is_light() {
+        egui::Color32::from_gray(40)
+    } else {
+        egui::Color32::from_gray(230)
+    }
+}
+
+/// 源文文字色
+pub fn text_source() -> egui::Color32 {
+    if is_light() {
+        egui::Color32::from_gray(60)
+    } else {
+        egui::Color32::from_gray(200)
+    }
+}
+
+/// 正在翻译提示文字色
+pub fn text_loading() -> egui::Color32 {
+    if is_light() {
+        egui::Color32::from_gray(130)
+    } else {
+        egui::Color32::from_gray(120)
+    }
+}
+
+/// 箭头符号色
+pub fn arrow_color() -> egui::Color32 {
+    if is_light() {
+        egui::Color32::from_gray(140)
+    } else {
+        egui::Color32::from_gray(120)
+    }
+}
+
+/// 快捷键输入框背景色
+pub fn hotkey_input_bg(focused: bool, hovered: bool) -> egui::Color32 {
+    if is_light() {
+        if focused {
+            egui::Color32::from_rgb(204, 204, 204)
+        } else if hovered {
+            egui::Color32::from_rgb(229, 229, 229)
+        } else {
+            egui::Color32::from_rgb(240, 240, 240)
+        }
+    } else {
+        if focused {
+            egui::Color32::from_rgb(80, 80, 80)
+        } else if hovered {
+            egui::Color32::from_rgb(76, 76, 76)
+        } else {
+            egui::Color32::from_rgb(60, 60, 60)
+        }
+    }
+}
+
+/// 快捷键输入框文字色
+pub fn hotkey_input_text() -> egui::Color32 {
+    if is_light() {
+        egui::Color32::from_gray(50)
+    } else {
+        egui::Color32::from_gray(200)
+    }
+}
+
+/// 历史弹窗中元信息文字色
+pub fn history_meta() -> egui::Color32 {
+    if is_light() {
+        egui::Color32::from_gray(130)
+    } else {
+        egui::Color32::from_gray(110)
+    }
+}
+
+/// 历史弹窗中空状态文字色
+pub fn history_empty() -> egui::Color32 {
+    if is_light() {
+        egui::Color32::from_gray(150)
+    } else {
+        egui::Color32::from_gray(100)
+    }
+}
+
+/// 历史弹窗边框色
+pub fn history_border() -> egui::Color32 {
+    if is_light() {
+        egui::Color32::from_gray(200)
+    } else {
+        egui::Color32::from_gray(70)
+    }
+}
+
+/// 错误提示文字色
+pub fn error_text() -> egui::Color32 {
+    if is_light() {
+        egui::Color32::from_rgb(200, 50, 50)
+    } else {
+        egui::Color32::from_rgb(230, 120, 120)
+    }
+}
+
+/// 置顶按钮遮罩色
+pub fn pin_overlay() -> egui::Color32 {
+    if is_light() {
+        egui::Color32::from_rgba_unmultiplied(60, 60, 60, 40)
+    } else {
+        egui::Color32::from_rgba_unmultiplied(128, 128, 128, 64)
+    }
+}

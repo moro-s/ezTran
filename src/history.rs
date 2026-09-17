@@ -16,6 +16,7 @@ pub struct HistoryEntry {
     /// 引擎名称
     pub engine: String,
     /// 记录时间戳（Unix 秒）
+    #[allow(dead_code)]
     pub timestamp: u64,
 }
 

@@ -530,13 +530,7 @@ pub fn hotkey_input(ui: &mut egui::Ui, _id: &str, value: &mut String) {
         value.clone()
     };
 
-    let bg = if resp.has_focus() {
-        egui::Color32::from_rgb(80, 80, 80)
-    } else if resp.hovered() {
-        egui::Color32::from_rgb(76, 76, 76)
-    } else {
-        egui::Color32::from_rgb(60, 60, 60)
-    };
+    let bg = crate::theme::hotkey_input_bg(resp.has_focus(), resp.hovered());
 
     ui.painter().rect_filled(rect, 4.0, bg);
     ui.painter().text(
@@ -544,7 +538,7 @@ pub fn hotkey_input(ui: &mut egui::Ui, _id: &str, value: &mut String) {
         egui::Align2::CENTER_CENTER,
         display,
         egui::FontId::proportional(14.0),
-        egui::Color32::from_gray(200),
+        crate::theme::hotkey_input_text(),
     );
 
     // 获取焦点后捕获按键

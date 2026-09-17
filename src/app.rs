@@ -117,7 +117,7 @@ impl eframe::App for EzTranApp {
         let settings_visible = ui::is_settings_visible();
         let main_hidden = window::is_main_hidden();
         if settings_visible {
-            log::info!("[update] 调用 draw_settings (main_hidden={})", main_hidden);
+            log::debug!("[update] 调用 draw_settings (main_hidden={})", main_hidden);
             ui::draw_settings(ctx);
         }
 
@@ -125,9 +125,7 @@ impl eframe::App for EzTranApp {
         {
             let show_history = ui::state::STATE.lock().unwrap().show_history;
             if show_history {
-                log::info!("[update] 调用 draw_history");
                 ui::history::draw_history(ctx);
-                log::info!("[update] draw_history 返回");
             }
         }
 
@@ -204,7 +202,7 @@ fn get_icon_texture(ctx: &egui::Context) -> egui::TextureHandle {
 
 /// 绘制自绘标题栏（置顶 / 最小化 / 最大化 / 关闭）
 fn draw_titlebar(ctx: &egui::Context) {
-    let titlebar_bg = egui::Color32::from_rgb(37, 37, 38);
+    let titlebar_bg = theme::titlebar_bg();
     egui::TopBottomPanel::top("custom_titlebar")
         .exact_height(34.0)
         .frame(
@@ -251,19 +249,19 @@ fn draw_titlebar(ctx: &egui::Context) {
                 // ── 右侧按钮 ──
                 // 置顶
                 let pinned = window::is_pinned();
-                let pin_resp = titlebar_button(ui, "\u{1F4CC}", egui::Color32::from_rgb(60, 60, 60));
+                let pin_resp = titlebar_button(ui, "\u{1F4CC}", theme::titlebar_btn_hover());
                 if pinned {
                     ui.painter().rect_filled(
                         pin_resp.rect,
                         0.0,
-                        egui::Color32::from_rgba_unmultiplied(128, 128, 128, 64),
+                        theme::pin_overlay(),
                     );
                     ui.painter().text(
                         pin_resp.rect.center(),
                         egui::Align2::CENTER_CENTER,
                         "\u{1F4CC}",
                         egui::FontId::proportional(14.0),
-                        egui::Color32::from_gray(200),
+                        theme::titlebar_text(),
                     );
                 }
                 if pin_resp.clicked() {
@@ -277,7 +275,7 @@ fn draw_titlebar(ctx: &egui::Context) {
                 }
 
                 // 最小化
-                let min_resp = titlebar_button(ui, "\u{2014}", egui::Color32::from_rgb(60, 60, 60));
+                let min_resp = titlebar_button(ui, "\u{2014}", theme::titlebar_btn_hover());
                 if min_resp.clicked() {
                     window::minimize_main();
                 }
@@ -285,7 +283,7 @@ fn draw_titlebar(ctx: &egui::Context) {
                 // 最大化/还原
                 let maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
                 let max_icon = if maximized { "\u{2750}" } else { "\u{25A2}" };
-                let max_resp = titlebar_button(ui, max_icon, egui::Color32::from_rgb(60, 60, 60));
+                let max_resp = titlebar_button(ui, max_icon, theme::titlebar_btn_hover());
                 if max_resp.clicked() {
                     window::toggle_maximize(maximized);
                 }
@@ -315,7 +313,7 @@ fn titlebar_button(
         egui::Align2::CENTER_CENTER,
         icon,
         egui::FontId::proportional(14.0),
-        egui::Color32::from_gray(200),
+        theme::titlebar_text(),
     );
     resp
 }

@@ -21,7 +21,7 @@ pub fn draw_translate(ctx: &egui::Context) {
     }
 
     // 面板背景色 #1E1E1E
-    let panel_bg = egui::Color32::from_rgb(30, 30, 30);
+    let panel_bg = crate::theme::panel_bg();
     let panel_frame = egui::Frame::default()
         .fill(panel_bg)
         .rounding(8.0)
@@ -105,7 +105,6 @@ pub fn draw_translate(ctx: &egui::Context) {
                         crate::ui::state::show_settings_window();
                     }
                     if ui.button("📜 历史").clicked() {
-                        log::info!("[translate] 历史按钮点击");
                         let mut s = STATE.lock().unwrap();
                         s.show_history = !s.show_history;
                     }
@@ -118,7 +117,7 @@ pub fn draw_translate(ctx: &egui::Context) {
     egui::CentralPanel::default()
         .frame(
             egui::Frame::default()
-                .fill(egui::Color32::from_rgb(43, 43, 43))
+                .fill(crate::theme::central_bg())
                 .inner_margin(egui::Margin::same(2.0)),
         )
         .show(ctx, |ui| {
@@ -143,7 +142,7 @@ pub fn draw_translate(ctx: &egui::Context) {
                                 ui.horizontal(|ui| {
                                     ui.label(
                                         egui::RichText::new("原文")
-                                            .color(egui::Color32::from_rgb(170, 170, 170)),
+                                            .color(crate::theme::label_secondary()),
                                     );
                                     ui.with_layout(
                                         egui::Layout::right_to_left(egui::Align::Center),
@@ -219,7 +218,7 @@ pub fn draw_translate(ctx: &egui::Context) {
                                 ui.horizontal(|ui| {
                                     ui.label(
                                         egui::RichText::new("译文")
-                                            .color(egui::Color32::from_rgb(170, 170, 170)),
+                                            .color(crate::theme::label_secondary()),
                                     );
                                     ui.with_layout(
                                         egui::Layout::right_to_left(egui::Align::Center),
@@ -262,7 +261,7 @@ pub fn draw_translate(ctx: &egui::Context) {
                                         ui.spinner();
                                         ui.label(
                                             egui::RichText::new("正在翻译...")
-                                                .color(egui::Color32::from_gray(120)),
+                                                .color(crate::theme::text_loading()),
                                         );
                                     });
                                 } else {
@@ -274,14 +273,14 @@ pub fn draw_translate(ctx: &egui::Context) {
                                                     ui.label(
                                                         egui::RichText::new(&r.text)
                                                             .text_style(TextStyle::Body)
-                                                            .color(egui::Color32::from_gray(230)),
+                                                            .color(crate::theme::text_translated()),
                                                     );
                                                 });
                                         }
                                         Some(Err(e)) => {
                                             ui.add_space(12.0);
                                             ui.colored_label(
-                                                egui::Color32::from_rgb(230, 120, 120),
+                                                crate::theme::error_text(),
                                                 format!("❌ {}", e),
                                             );
                                         }
@@ -290,7 +289,7 @@ pub fn draw_translate(ctx: &egui::Context) {
                                             ui.vertical_centered(|ui| {
                                                 ui.label(
                                                     egui::RichText::new("译文将显示在这里")
-                                                        .color(egui::Color32::from_gray(90))
+                                                        .color(crate::theme::text_hint())
                                                         .italics(),
                                                 );
                                                 ui.add_space(6.0);
@@ -298,7 +297,7 @@ pub fn draw_translate(ctx: &egui::Context) {
                                                     egui::RichText::new(
                                                         "输入文本后点击「翻译」或按 Ctrl+Enter",
                                                     )
-                                                    .color(egui::Color32::from_gray(70))
+                                                    .color(crate::theme::text_hint_dim())
                                                     .small(),
                                                 );
                                             });

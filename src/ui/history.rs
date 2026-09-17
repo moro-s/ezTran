@@ -4,12 +4,10 @@ use crate::ui::state::STATE;
 
 /// 绘制翻译历史弹窗
 pub fn draw_history(ctx: &egui::Context) {
-    log::info!("[history] draw_history 开始");
     let mut open = true;
     let mut clicked_entry: Option<(String, String, String)> = None;
     let mut clear_all = false;
 
-    log::info!("[history] 准备创建 Window");
     egui::Window::new("翻译历史")
         .id(egui::Id::new("history_window"))
         .open(&mut open)
@@ -21,16 +19,14 @@ pub fn draw_history(ctx: &egui::Context) {
         .min_height(240.0)
         .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
         .show(ctx, |ui| {
-            log::info!("[history] Window show 闭包开始");
             let count = crate::history::get_all().len();
-            log::info!("[history] history count={}", count);
 
             // 顶栏
             ui.horizontal(|ui| {
                 ui.label(
                     egui::RichText::new(format!("共 {} 条记录（最多 50 条）", count))
                         .small()
-                        .color(egui::Color32::from_gray(120)),
+                        .color(crate::theme::history_meta()),
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui.button("🗑 清空").clicked() {
@@ -50,7 +46,7 @@ pub fn draw_history(ctx: &egui::Context) {
                 ui.vertical_centered(|ui| {
                     ui.label(
                         egui::RichText::new("暂无翻译历史")
-                            .color(egui::Color32::from_gray(100)),
+                            .color(crate::theme::history_empty()),
                     );
                 });
             } else {
@@ -60,20 +56,20 @@ pub fn draw_history(ctx: &egui::Context) {
                         for entry in &history {
                             let frame = egui::Frame::group(ui.style())
                                 .inner_margin(8.0)
-                                .stroke(egui::Stroke::new(0.5_f32, egui::Color32::from_gray(70)));
+                                .stroke(egui::Stroke::new(0.5_f32, crate::theme::history_border()));
                             let resp = frame.show(ui, |ui| {
                                 ui.horizontal_wrapped(|ui| {
                                     ui.label(
                                         egui::RichText::new(&entry.source)
-                                            .color(egui::Color32::from_gray(200)),
+                                            .color(crate::theme::text_source()),
                                     );
                                     ui.label(
                                         egui::RichText::new("→")
-                                            .color(egui::Color32::from_gray(120)),
+                                            .color(crate::theme::arrow_color()),
                                     );
                                     ui.label(
                                         egui::RichText::new(&entry.translated)
-                                            .color(egui::Color32::from_gray(230))
+                                            .color(crate::theme::text_translated())
                                             .strong(),
                                     );
                                 });
@@ -84,7 +80,7 @@ pub fn draw_history(ctx: &egui::Context) {
                                         entry.from, entry.to, entry.engine
                                     ))
                                     .small()
-                                    .color(egui::Color32::from_gray(110)),
+                                    .color(crate::theme::history_meta()),
                                 );
                             });
                             if resp.response.clicked() {
@@ -98,10 +94,7 @@ pub fn draw_history(ctx: &egui::Context) {
                         }
                     });
             }
-            log::info!("[history] Window show 闭包结束");
         });
-
-    log::info!("[history] Window show 返回, open={}", open);
 
     // 窗口关闭
     if !open {
@@ -116,5 +109,4 @@ pub fn draw_history(ctx: &egui::Context) {
         s.to_lang = to;
         s.show_history = false;
     }
-    log::info!("[history] draw_history 结束");
 }
