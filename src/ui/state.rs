@@ -60,11 +60,13 @@ pub fn init_state(config: AppConfig) {
 
 /// 打开设置窗口
 pub fn show_settings_window() {
+    log::info!("[settings] 打开设置窗口");
     STATE.lock().unwrap().show_settings = true;
 }
 
 /// 关闭设置窗口
 pub fn hide_settings_window() {
+    log::info!("[settings] 关闭设置窗口");
     STATE.lock().unwrap().show_settings = false;
 }
 

@@ -16,6 +16,7 @@ Thumbs.db
 
 # Debug
 debug.log
+eztran.log
 
 # Codegraph
 .codegraph/

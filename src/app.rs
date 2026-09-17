@@ -47,24 +47,29 @@ impl EzTranApp {
         MenuEvent::set_event_handler(Some(|event: MenuEvent| {
             let id = &event.id;
             if QUIT_MENU_ID.lock().unwrap().as_ref().is_some_and(|qid| id == qid) {
+                log::info!("[tray] 菜单事件: 退出");
                 std::process::exit(0);
             }
             if SETTINGS_MENU_ID.lock().unwrap().as_ref().is_some_and(|sid| id == sid) {
+                log::info!("[tray] 菜单事件: 设置");
                 // 只弹出设置窗口，不恢复翻译工作台
                 ui::show_settings_window();
                 window::wake();
                 return;
             }
             if TRANSLATE_MENU_ID.lock().unwrap().as_ref().is_some_and(|tid| id == tid) {
+                log::info!("[tray] 菜单事件: 翻译");
                 window::show_main_if_hidden();
                 window::wake();
                 return;
             }
+            log::debug!("[tray] 菜单事件: 未匹配的 id={:?}", id);
         }));
 
         // 托盘图标双击 → 显示翻译工作台
         TrayIconEvent::set_event_handler(Some(|event: TrayIconEvent| {
             if let TrayIconEvent::DoubleClick { .. } = event {
+                log::info!("[tray] 图标双击: 显示翻译工作台");
                 window::show_main_if_hidden();
                 window::wake();
             }
@@ -88,12 +93,14 @@ impl eframe::App for EzTranApp {
         window::handle_close_request(ctx);
 
         // 设置窗口（独立视口，主窗口隐藏时也需渲染）
-        if ui::is_settings_visible() {
+        let settings_visible = ui::is_settings_visible();
+        if settings_visible {
             ui::draw_settings(ctx);
         }
 
         // 执行延迟隐藏
         if window::process_pending_hide() {
+            log::debug!("[update] process_pending_hide 已处理，跳过本帧绘制");
             return;
         }
 
