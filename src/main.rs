@@ -5,6 +5,7 @@ mod icon;
 mod theme;
 mod translate;
 mod ui;
+mod window;
 
 use app::EzTranApp;
 use config::AppConfig;
