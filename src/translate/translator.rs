@@ -54,11 +54,13 @@ impl Translator {
         }
 
         // 有道智云 API: https://openapi.youdao.com/api
-        // sign = sha256(appKey + q + salt + appSecret)
+        // sign = sha256(appKey + input + salt + appSecret)
+        // input: q 长度 > 20 时取前10 + 长度 + 后10，否则为 q 本身
         let salt = gen_salt();
-        let sign_input = format!("{}{}{}{}", engine.api_key, text, salt, engine.api_secret);
+        let input = youdao_sign_input(text);
+        let sign_input = format!("{}{}{}{}", engine.api_key, input, salt, engine.api_secret);
         let sign = sha256_hex(&sign_input);
-        log::debug!("[translate][youdao] 签名完成: salt={} sign_len={}", salt, sign.len());
+        log::debug!("[translate][youdao] 签名完成: salt={} input_len={} sign_len={}", salt, input.len(), sign.len());
 
         let url = format!(
             "https://openapi.youdao.com/api?q={}&from={}&to={}&appKey={}&salt={}&sign={}",
@@ -238,6 +240,18 @@ fn gen_salt() -> String {
         .to_string()
 }
 
+/// 有道签名 input 计算：文本长度 > 20 时取前10字符 + 长度 + 后10字符
+fn youdao_sign_input(text: &str) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    if chars.len() > 20 {
+        let head: String = chars[..10].iter().collect();
+        let tail: String = chars[chars.len() - 10..].iter().collect();
+        format!("{}{}{}", head, chars.len(), tail)
+    } else {
+        text.to_string()
+    }
+}
+
 /// 计算 SHA-256 十六进制摘要
 fn sha256_hex(input: &str) -> String {
     let mut hasher = Sha256::new();
@@ -274,6 +288,26 @@ fn youdao_error_msg(code: &str) -> &'static str {
         "50" => "密钥异常",
         "51" => "词库异常",
         "52" => "签名验证失败",
+        "101" => "缺少必填参数",
+        "102" => "不支持的语言类型",
+        "103" => "翻译文本过长",
+        "104" => "不支持的功能",
+        "105" => "该功能已下线",
+        "106" => "请求失败",
+        "107" => "密钥不合法",
+        "108" => "appid 不存在",
+        "109" => "签名无效",
+        "110" => "访问频率受限",
+        "111" => "请求过多",
+        "112" => "账户欠费",
+        "113" => "账号被停用",
+        "201" => "密钥不合法",
+        "202" => "签名检验失败",
+        "203" => "访问IP不在白名单",
+        "205" => "请求来源不合法",
+        "206" => "签名校验失败",
+        "207" => "账户欠费",
+        "208" => "账号被停用",
         _ => "未知错误",
     }
 }
@@ -285,7 +319,10 @@ fn youdao_check_error(resp: &serde_json::Value) -> Option<&'static str> {
         .and_then(|v| v.as_str().map(|s| s.to_string()).or_else(|| v.as_i64().map(|n| n.to_string())));
     match code.as_deref() {
         Some("0") | None => None,
-        Some(c) => Some(youdao_error_msg(c)),
+        Some(c) => {
+            log::warn!("[translate][youdao] errorCode={} resp={}", c, resp);
+            Some(youdao_error_msg(c))
+        }
     }
 }
 
@@ -451,6 +488,34 @@ mod tests {
         let sign = sha256_hex(&sign_input);
         assert_eq!(sign.len(), 64);
         assert!(sign.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn test_youdao_sign_input_short() {
+        // 短文本（<= 20 字符）直接返回原文
+        assert_eq!(youdao_sign_input("hello"), "hello");
+        assert_eq!(youdao_sign_input("你好世界"), "你好世界");
+        assert_eq!(youdao_sign_input("12345678901234567890"), "12345678901234567890");
+    }
+
+    #[test]
+    fn test_youdao_sign_input_long() {
+        // 长文本（> 20 字符）取前10 + 长度 + 后10
+        let text = "abcdefghijklmnopqrstuvwxyz"; // 26 字符
+        let input = youdao_sign_input(text);
+        assert_eq!(input, "abcdefghij26qrstuvwxyz");
+    }
+
+    #[test]
+    fn test_youdao_sign_input_long_unicode() {
+        // 中英文混合长文本
+        let text = "你好世界这是一段测试文本用于验证签名逻辑abcdef";
+        let chars: Vec<char> = text.chars().collect();
+        let input = youdao_sign_input(text);
+        // 前10字符 + 长度 + 后10字符
+        let head: String = chars[..10].iter().collect();
+        let tail: String = chars[chars.len() - 10..].iter().collect();
+        assert_eq!(input, format!("{}{}{}", head, chars.len(), tail));
     }
 
     // ── md5_hex 测试 ──

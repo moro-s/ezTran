@@ -402,44 +402,45 @@ fn settings_engines(ui: &mut egui::Ui) {
 
 // ── 关于 ──
 fn settings_about(ui: &mut egui::Ui) {
-    ui.heading("关于");
-    ui.add_space(12.0);
-
-    // 应用信息
-    egui::Frame::group(ui.style())
-        .inner_margin(12.0)
-        .show(ui, |ui| {
-            ui.vertical(|ui| {
-                ui.horizontal(|ui| {
-                    ui.label(egui::RichText::new("EzTran").size(22.0).strong());
-                    ui.label(egui::RichText::new("v0.1.0").color(crate::theme::label_secondary()));
-                });
-                ui.add_space(4.0);
-                ui.label(
-                    egui::RichText::new("轻量级桌面翻译工具")
-                        .color(crate::theme::label_secondary()),
-                );
-                ui.add_space(4.0);
-                ui.label(
-                    egui::RichText::new("基于 egui + Rust 构建")
-                        .color(crate::theme::text_hint())
-                        .small(),
-                );
-            });
-        });
-
-    ui.add_space(20.0);
-
-    // 底部居中：GitHub 链接 + 检查更新
     ui.vertical_centered(|ui| {
+        ui.add_space(8.0);
+        ui.heading("关于");
+        ui.add_space(12.0);
+
+        // 应用信息
+        egui::Frame::group(ui.style())
+            .inner_margin(12.0)
+            .show(ui, |ui| {
+                ui.vertical_centered(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(egui::RichText::new("EzTran").size(22.0).strong());
+                        ui.label(egui::RichText::new("v0.1.0").color(crate::theme::label_secondary()));
+                    });
+                    ui.add_space(4.0);
+                    ui.label(
+                        egui::RichText::new("轻量级桌面翻译工具")
+                            .color(crate::theme::label_secondary()),
+                    );
+                    ui.add_space(4.0);
+                    ui.label(
+                        egui::RichText::new("基于 egui + Rust 构建")
+                            .color(crate::theme::text_hint())
+                            .small(),
+                    );
+                });
+            });
+
+        ui.add_space(20.0);
+
+        // GitHub 链接 + 检查更新
         ui.hyperlink_to("🌐 GitHub 仓库", "https://github.com/eztran/eztran");
         ui.add_space(8.0);
         if ui.button("🔄 检查更新").clicked() {
             show_toast(ui.ctx(), "暂无可用的更新");
         }
-    });
 
-    render_toast(ui);
+        render_toast(ui);
+    });
 }
 
 fn lang_combo_settings(ui: &mut egui::Ui, id: &str, include_auto: bool) {
