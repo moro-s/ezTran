@@ -66,3 +66,8 @@ pub fn create_window_icon() -> egui::IconData {
         height: h,
     }
 }
+
+/// 返回图标 RGBA 数据及尺寸
+pub fn icon_rgba() -> (Vec<u8>, u32, u32) {
+    create_icon_rgba()
+}

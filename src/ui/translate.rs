@@ -94,22 +94,10 @@ pub fn draw_translate(ctx: &egui::Context) {
 
                 ui.separator();
 
-                // 右侧：钉住 + 设置按钮
+                // 右侧：设置按钮
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui.button("⚙ 设置").clicked() {
                         crate::ui::state::show_settings_window();
-                    }
-                    let pinned = STATE.lock().unwrap().pinned;
-                    let btn_text = if pinned { "📌 取消置顶" } else { "📌 置顶" };
-                    if ui.button(btn_text).clicked() {
-                        let mut s = STATE.lock().unwrap();
-                        s.pinned = !s.pinned;
-                        let level = if s.pinned {
-                            egui::WindowLevel::AlwaysOnTop
-                        } else {
-                            egui::WindowLevel::Normal
-                        };
-                        ui.ctx().send_viewport_cmd(egui::ViewportCommand::WindowLevel(level));
                     }
                 });
             });

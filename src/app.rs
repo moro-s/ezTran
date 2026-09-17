@@ -5,8 +5,6 @@ use crate::ui;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tray_icon::menu::{Menu, MenuEvent, MenuItem, PredefinedMenuItem};
 use tray_icon::{TrayIcon, TrayIconBuilder, TrayIconEvent};
-
-/// 全局 egui Context，用于在托盘事件中唤醒事件循环
 static EGUI_CTX: std::sync::LazyLock<std::sync::Mutex<Option<egui::Context>>> =
     std::sync::LazyLock::new(|| std::sync::Mutex::new(None));
 
@@ -27,6 +25,9 @@ static PENDING_HIDE: AtomicBool = AtomicBool::new(false);
 
 /// 窗口当前是否已隐藏
 static WINDOW_HIDDEN: AtomicBool = AtomicBool::new(false);
+
+/// 窗口是否置顶
+static STATE_PINNED: AtomicBool = AtomicBool::new(false);
 
 /// 圆角是否已设置（仅执行一次）
 #[cfg(windows)]
@@ -321,6 +322,29 @@ const SW_MINIMIZE: i32 = 6;
 #[cfg(windows)]
 const SW_RESTORE: i32 = 9;
 
+/// 获取图标纹理（缓存）
+fn get_icon_texture(ctx: &egui::Context) -> egui::TextureHandle {
+    use std::sync::OnceLock;
+    static TEX: OnceLock<egui::TextureHandle> = OnceLock::new();
+    if let Some(tex) = TEX.get() {
+        return tex.clone();
+    }
+    let (rgba, w, h) = icon::icon_rgba();
+    let tex = ctx.load_texture(
+        "titlebar_icon",
+        egui::ColorImage {
+            size: [w as usize, h as usize],
+            pixels: rgba
+                .chunks_exact(4)
+                .map(|c| egui::Color32::from_rgba_unmultiplied(c[0], c[1], c[2], c[3]))
+                .collect(),
+        },
+        egui::TextureOptions::LINEAR,
+    );
+    let _ = TEX.set(tex.clone());
+    tex
+}
+
 /// 绘制自绘标题栏（最小化 / 最大化 / 关闭）
 fn draw_titlebar(ctx: &egui::Context) {
     let titlebar_bg = egui::Color32::from_rgb(37, 37, 38);
@@ -342,23 +366,24 @@ fn draw_titlebar(ctx: &egui::Context) {
             ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
 
             ui.horizontal(|ui| {
-                // ── 左侧标题 ──
-                ui.add_space(12.0);
-                let title_resp = ui.label(
-                    egui::RichText::new("EzTran - 翻译")
-                        .color(egui::Color32::from_gray(200))
-                        .strong(),
+                // ── 左侧图标 ──
+                ui.add_space(8.0);
+                let tex = get_icon_texture(ctx);
+                let icon_size = 18.0;
+                let img_resp = ui.add(
+                    egui::Image::from_texture(&tex)
+                        .fit_to_exact_size(egui::vec2(icon_size, icon_size)),
                 );
 
                 // 标题区域可拖动
                 let title_drag = ui.interact(
-                    title_resp.rect,
+                    img_resp.rect,
                     ui.id().with("title_drag"),
                     egui::Sense::drag(),
                 );
 
                 // ── 中间空白（可拖动）──
-                let btn_w = 46.0 * 3.0;
+                let btn_w = 46.0 * 4.0;
                 let drag_w = (ui.available_width() - btn_w).max(0.0);
                 let drag_resp = ui.allocate_response(
                     egui::vec2(drag_w, 34.0),
@@ -374,6 +399,41 @@ fn draw_titlebar(ctx: &egui::Context) {
                 }
 
                 // ── 右侧按钮 ──
+                // 置顶
+                let pinned = STATE_PINNED.load(Ordering::SeqCst);
+                let pin_icon = if pinned { "\u{1F4CC}" } else { "\u{1F4CC}" };
+                let pin_color = if pinned {
+                    egui::Color32::from_rgb(76, 76, 76)
+                } else {
+                    egui::Color32::from_rgb(60, 60, 60)
+                };
+                let pin_resp = titlebar_button(ui, pin_icon, pin_color);
+                if pinned {
+                    ui.painter().rect_filled(
+                        pin_resp.rect,
+                        0.0,
+                        egui::Color32::from_rgba_unmultiplied(128, 128, 128, 64),
+                    );
+                    // 重绘图标确保在背景之上
+                    ui.painter().text(
+                        pin_resp.rect.center(),
+                        egui::Align2::CENTER_CENTER,
+                        pin_icon,
+                        egui::FontId::proportional(14.0),
+                        egui::Color32::from_gray(200),
+                    );
+                }
+                if pin_resp.clicked() {
+                    let new_pinned = !STATE_PINNED.load(Ordering::SeqCst);
+                    STATE_PINNED.store(new_pinned, Ordering::SeqCst);
+                    let level = if new_pinned {
+                        egui::WindowLevel::AlwaysOnTop
+                    } else {
+                        egui::WindowLevel::Normal
+                    };
+                    ctx.send_viewport_cmd(egui::ViewportCommand::WindowLevel(level));
+                }
+
                 // 最小化
                 let min_resp = titlebar_button(ui, "\u{2014}", egui::Color32::from_rgb(60, 60, 60));
                 if min_resp.clicked() {

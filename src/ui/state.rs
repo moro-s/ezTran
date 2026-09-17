@@ -38,8 +38,6 @@ pub struct AppState {
     pub toast_time: f64,
     /// 配置的可变副本（用于设置页编辑）
     pub config_edit: AppConfig,
-    /// 窗口是否置顶
-    pub pinned: bool,
     /// 设置窗口当前选中的标签页
     pub settings_tab: SettingsTab,
 }
