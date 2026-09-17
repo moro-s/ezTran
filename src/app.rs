@@ -146,6 +146,9 @@ impl eframe::App for EzTranApp {
             return;
         }
 
+        // 首次启动将主窗口居中
+        center_main_window_on_first_launch(ctx);
+
         draw_titlebar(ctx);
         ui::draw_translate(ctx);
     }
@@ -153,6 +156,26 @@ impl eframe::App for EzTranApp {
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         self._tray.take();
     }
+}
+
+/// 首次启动将主窗口居中（仅执行一次）
+fn center_main_window_on_first_launch(ctx: &egui::Context) {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static CENTERED: AtomicBool = AtomicBool::new(false);
+    if CENTERED.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let (win_w, win_h) = (820.0, 520.0);
+    let (screen_w, screen_h) = window::get_screen_size();
+    let pos = egui::pos2(
+        ((screen_w as f32 - win_w) / 2.0).max(0.0),
+        ((screen_h as f32 - win_h) / 2.0).max(0.0),
+    );
+    log::info!(
+        "[window] 主窗口首次启动居中: pos=({:.0},{:.0}) screen={}x{}",
+        pos.x, pos.y, screen_w, screen_h
+    );
+    ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(pos));
 }
 
 /// 划词翻译处理：从热键线程获取选中文本 → 显示窗口 → 自动翻译

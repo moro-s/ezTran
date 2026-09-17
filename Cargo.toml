@@ -22,6 +22,8 @@ tray-icon = "0.25"
 log = "0.4"
 simplelog = "0.12"
 chrono = "0.4"
+sha2 = "0.10"
+md-5 = "0.10"
 
 [profile.release]
 opt-level = "s"

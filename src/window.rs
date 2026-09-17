@@ -512,3 +512,24 @@ fn dwm_set_window_attribute(hwnd: *mut std::ffi::c_void, attr: u32, value: &i32)
         );
     }
 }
+
+/// 获取主显示器尺寸（物理像素），用于窗口居中计算
+#[cfg(windows)]
+pub fn get_screen_size() -> (i32, i32) {
+    extern "system" {
+        fn GetSystemMetrics(nindex: i32) -> i32;
+    }
+    const SM_CXSCREEN: i32 = 0;
+    const SM_CYSCREEN: i32 = 1;
+    unsafe {
+        let w = GetSystemMetrics(SM_CXSCREEN);
+        let h = GetSystemMetrics(SM_CYSCREEN);
+        log::debug!("[window] GetSystemMetrics: screen={}x{}", w, h);
+        (w, h)
+    }
+}
+
+#[cfg(not(windows))]
+pub fn get_screen_size() -> (i32, i32) {
+    (1920, 1080)
+}

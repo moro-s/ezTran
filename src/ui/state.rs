@@ -63,6 +63,7 @@ pub fn init_state(config: AppConfig) {
 /// 打开设置窗口
 pub fn show_settings_window() {
     log::info!("[settings] 打开设置窗口");
+    crate::ui::settings::request_center();
     STATE.lock().unwrap().show_settings = true;
 }
 

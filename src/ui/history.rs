@@ -21,24 +21,15 @@ pub fn draw_history(ctx: &egui::Context) {
         .show(ctx, |ui| {
             let count = crate::history::get_all().len();
 
-            // 顶栏
+            // 顶栏：记录数
             ui.horizontal(|ui| {
                 ui.label(
                     egui::RichText::new(format!("共 {} 条记录（最多 50 条）", count))
                         .small()
                         .color(crate::theme::history_meta()),
                 );
-                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.button("🗑 清空").clicked() {
-                        clear_all = true;
-                    }
-                });
             });
             ui.separator();
-
-            if clear_all {
-                crate::history::clear();
-            }
 
             let history = crate::history::get_all();
             if history.is_empty() {
@@ -94,6 +85,18 @@ pub fn draw_history(ctx: &egui::Context) {
                             ui.add_space(2.0);
                         }
                     });
+            }
+
+            // 底栏：清空按钮居中
+            ui.separator();
+            ui.vertical_centered(|ui| {
+                if ui.button("🗑 清空历史").clicked() {
+                    clear_all = true;
+                }
+            });
+
+            if clear_all {
+                crate::history::clear();
             }
         });
 

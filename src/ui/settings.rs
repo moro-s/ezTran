@@ -1,6 +1,15 @@
 use crate::config::{AppConfig, LANGUAGES};
 use crate::ui::state::{SettingsTab, STATE};
 use crate::ui::translate::{render_toast, show_toast, update_toast};
+use std::sync::atomic::{AtomicBool, Ordering};
+
+/// 标记设置窗口需要居中（打开时设置，视口首次渲染时消费）
+static SETTINGS_NEED_CENTER: AtomicBool = AtomicBool::new(true);
+
+/// 请求设置窗口下次渲染时居中
+pub fn request_center() {
+    SETTINGS_NEED_CENTER.store(true, Ordering::SeqCst);
+}
 
 /// 绘制设置页面（独立 OS 窗口）
 pub fn draw_settings(ctx: &egui::Context) {
@@ -9,18 +18,42 @@ pub fn draw_settings(ctx: &egui::Context) {
     // toast 自动消失
     update_toast(ctx);
 
+    // 计算居中位置（基于显示器物理尺寸）
+    let (win_w, win_h) = (640.0, 480.0);
+    let (screen_w, screen_h) = crate::window::get_screen_size();
+    let center_pos = egui::pos2(
+        ((screen_w as f32 - win_w) / 2.0).max(0.0),
+        ((screen_h as f32 - win_h) / 2.0).max(0.0),
+    );
+    log::debug!(
+        "[settings] screen={}x{} center_pos=({:.0},{:.0})",
+        screen_w, screen_h, center_pos.x, center_pos.y
+    );
+
     ctx.show_viewport_immediate(
         egui::ViewportId::from_hash_of("settings"),
         egui::ViewportBuilder::default()
             .with_title("设置")
-            .with_inner_size([640.0, 480.0])
-            .with_min_inner_size([500.0, 360.0]),
+            .with_inner_size([win_w, win_h])
+            .with_min_inner_size([500.0, 360.0])
+            .with_position(center_pos),
         |ctx, _class| {
             // 关闭按钮 → 隐藏设置窗口
             if ctx.input(|i| i.viewport().close_requested()) {
                 ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
                 crate::ui::state::hide_settings_window();
                 return;
+            }
+
+            // 设置窗口首次显示时居中
+            if SETTINGS_NEED_CENTER.swap(false, Ordering::SeqCst) {
+                let (sw, sh) = crate::window::get_screen_size();
+                let pos = egui::pos2(
+                    ((sw as f32 - win_w) / 2.0).max(0.0),
+                    ((sh as f32 - win_h) / 2.0).max(0.0),
+                );
+                log::info!("[settings] 发送居中命令 OuterPosition=({:.0},{:.0}) screen={}x{}", pos.x, pos.y, sw, sh);
+                ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(pos));
             }
 
             egui::CentralPanel::default().show(ctx, |ui| {
@@ -68,8 +101,46 @@ pub fn draw_settings(ctx: &egui::Context) {
                     );
                 });
             });
+
+            // 自动保存：每帧检测配置变更，有变化则自动保存
+            auto_save_config(ctx);
         },
     );
+}
+
+/// 自动保存配置：通过 JSON 快照比较检测变更，变化时自动保存并重新注册热键
+fn auto_save_config(ctx: &egui::Context) {
+    use std::sync::LazyLock;
+    static LAST_SNAPSHOT: LazyLock<std::sync::Mutex<String>> =
+        LazyLock::new(|| std::sync::Mutex::new(String::new()));
+
+    let current_json = {
+        let s = STATE.lock().unwrap();
+        serde_json::to_string(&s.config_edit).unwrap_or_default()
+    };
+
+    let need_save = {
+        let last = LAST_SNAPSHOT.lock().unwrap();
+        *last != current_json
+    };
+
+    if !need_save {
+        return;
+    }
+
+    let mut s = STATE.lock().unwrap();
+    match s.config_edit.save() {
+        Ok(()) => {
+            *LAST_SNAPSHOT.lock().unwrap() = current_json;
+            log::info!("[settings] 配置已自动保存");
+            drop(s);
+            crate::hotkey::reregister_hotkeys();
+        }
+        Err(e) => {
+            s.toast = Some(format!("配置自动保存失败: {}", e));
+            s.toast_time = ctx.input(|i| i.time);
+        }
+    }
 }
 
 // ── 常规设置 ──
@@ -192,26 +263,8 @@ fn settings_general(ui: &mut egui::Ui) {
     ui.separator();
     ui.add_space(10.0);
 
-    // 保存 / 恢复
+    // 恢复默认
     ui.horizontal(|ui| {
-        if ui.button("💾 保存配置").clicked() {
-            let mut s = STATE.lock().unwrap();
-            let mut saved_ok = false;
-            match s.config_edit.save() {
-                Ok(()) => {
-                    s.toast = Some("配置已保存".into());
-                    saved_ok = true;
-                }
-                Err(e) => {
-                    s.toast = Some(format!("保存失败: {}", e));
-                }
-            }
-            s.toast_time = ui.input(|i| i.time);
-            drop(s);
-            if saved_ok {
-                crate::hotkey::reregister_hotkeys();
-            }
-        }
         if ui.button("↩ 恢复默认").clicked() {
             STATE.lock().unwrap().config_edit = AppConfig::default();
         }
@@ -270,11 +323,14 @@ fn settings_engines(ui: &mut egui::Ui) {
                     // 类型
                     form_row(ui, "类型", |ui| {
                         let mut kind_val = kind;
-                        ui.horizontal(|ui| {
-                            for k in crate::translate::EngineKind::all() {
-                                ui.selectable_value(&mut kind_val, k.clone(), k.label());
-                            }
-                        });
+                        egui::ComboBox::from_id_salt(format!("engine_kind_{i}"))
+                            .selected_text(kind_val.label())
+                            .width(220.0)
+                            .show_ui(ui, |ui| {
+                                for k in crate::translate::EngineKind::all() {
+                                    ui.selectable_value(&mut kind_val, k.clone(), k.label());
+                                }
+                            });
                         STATE.lock().unwrap().config_edit.engines.engines[i].kind = kind_val;
                     });
 
@@ -301,14 +357,23 @@ fn settings_engines(ui: &mut egui::Ui) {
                             secret_buf;
                     });
 
-                    // Endpoint
-                    form_row(ui, "Endpoint", |ui| {
-                        let mut ep_buf = endpoint;
-                        ui.add(
-                            egui::TextEdit::singleline(&mut ep_buf).desired_width(220.0),
-                        );
-                        STATE.lock().unwrap().config_edit.engines.engines[i].endpoint = ep_buf;
-                    });
+                    // Endpoint（仅 DeepL 和自定义引擎需要配置）
+                    let need_endpoint = {
+                        let s = STATE.lock().unwrap();
+                        matches!(
+                            s.config_edit.engines.engines[i].kind,
+                            crate::translate::EngineKind::DeepL | crate::translate::EngineKind::Custom
+                        )
+                    };
+                    if need_endpoint {
+                        form_row(ui, "Endpoint", |ui| {
+                            let mut ep_buf = endpoint;
+                            ui.add(
+                                egui::TextEdit::singleline(&mut ep_buf).desired_width(220.0),
+                            );
+                            STATE.lock().unwrap().config_edit.engines.engines[i].endpoint = ep_buf;
+                        });
+                    }
 
                     ui.horizontal(|ui| {
                         if ui.button("🗑 删除此引擎").clicked() {
@@ -330,31 +395,7 @@ fn settings_engines(ui: &mut egui::Ui) {
             .push(crate::translate::EngineConfig::default());
     }
 
-    ui.add_space(16.0);
-    ui.separator();
-    ui.add_space(10.0);
-
-    // 保存
-    ui.horizontal(|ui| {
-        if ui.button("💾 保存配置").clicked() {
-            let mut s = STATE.lock().unwrap();
-            let mut saved_ok = false;
-            match s.config_edit.save() {
-                Ok(()) => {
-                    s.toast = Some("配置已保存".into());
-                    saved_ok = true;
-                }
-                Err(e) => {
-                    s.toast = Some(format!("保存失败: {}", e));
-                }
-            }
-            s.toast_time = ui.input(|i| i.time);
-            drop(s);
-            if saved_ok {
-                crate::hotkey::reregister_hotkeys();
-            }
-        }
-    });
+    ui.add_space(8.0);
 
     render_toast(ui);
 }
