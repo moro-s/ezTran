@@ -159,10 +159,20 @@ fn settings_general(ui: &mut egui::Ui) {
     ui.add_space(10.0);
 
     // 输入翻译
-    ui.checkbox(
-        &mut STATE.lock().unwrap().config_edit.enable_input_translate,
-        "输入翻译（唤起翻译工作台）",
-    );
+    {
+        let enabled = STATE.lock().unwrap().config_edit.enable_input_translate;
+        let mut enabled = enabled;
+        ui.checkbox(&mut enabled, "输入翻译");
+        STATE.lock().unwrap().config_edit.enable_input_translate = enabled;
+        if enabled {
+            ui.horizontal(|ui| {
+                ui.label("    输入翻译快捷键:");
+                let mut hk = STATE.lock().unwrap().config_edit.input_hotkey.clone();
+                crate::hotkey::hotkey_input(ui, "input_hotkey_field", &mut hk);
+                STATE.lock().unwrap().config_edit.input_hotkey = hk;
+            });
+        }
+    }
     ui.add_space(4.0);
 
     // 划词翻译
@@ -175,7 +185,7 @@ fn settings_general(ui: &mut egui::Ui) {
             ui.horizontal(|ui| {
                 ui.label("    划词翻译快捷键:");
                 let mut hk = STATE.lock().unwrap().config_edit.selection_hotkey.clone();
-                ui.add(egui::TextEdit::singleline(&mut hk).desired_width(160.0));
+                crate::hotkey::hotkey_input(ui, "selection_hotkey_field", &mut hk);
                 STATE.lock().unwrap().config_edit.selection_hotkey = hk;
             });
         }

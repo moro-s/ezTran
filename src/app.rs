@@ -3,6 +3,7 @@ use crate::icon;
 use crate::theme;
 use crate::ui;
 use crate::window;
+use crate::hotkey;
 use tray_icon::menu::{Menu, MenuEvent, MenuId, MenuItem, PredefinedMenuItem};
 use tray_icon::{TrayIcon, TrayIconBuilder, TrayIconEvent};
 
@@ -89,6 +90,9 @@ impl eframe::App for EzTranApp {
 
         theme::setup_fonts(ctx);
         theme::setup_style(ctx);
+
+        // 检测应用内快捷键
+        hotkey::check_app_hotkeys(ctx);
 
         // Alt+F4 → 隐藏到托盘
         window::handle_close_request(ctx);

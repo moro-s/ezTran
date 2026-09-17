@@ -77,6 +77,8 @@ pub struct AppConfig {
     pub default_to: String,
     /// 划词翻译快捷键
     pub selection_hotkey: String,
+    /// 输入翻译快捷键
+    pub input_hotkey: String,
     /// 应用主题
     pub theme: AppTheme,
     /// 应用字体名称（留空使用系统默认）
@@ -98,6 +100,7 @@ impl Default for AppConfig {
             default_from: "auto".into(),
             default_to: "zh".into(),
             selection_hotkey: "Ctrl+Shift+T".into(),
+            input_hotkey: "Ctrl+Shift+I".into(),
             theme: AppTheme::default(),
             font_family: String::new(),
             font_size: FontSize::default(),

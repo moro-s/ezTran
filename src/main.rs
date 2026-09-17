@@ -1,6 +1,7 @@
 mod app;
 mod config;
 mod font_list;
+mod hotkey;
 mod icon;
 mod theme;
 mod translate;
