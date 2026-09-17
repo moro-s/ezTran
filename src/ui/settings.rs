@@ -271,13 +271,15 @@ fn settings_engines(ui: &mut egui::Ui) {
                         STATE.lock().unwrap().config_edit.engines.engines[i].name = name_buf;
                     });
 
-                    // 启用 + 类型
+                    // 启用
                     form_row(ui, "启用", |ui| {
                         let mut en = enabled;
-                        ui.checkbox(&mut en, "");
+                        ui.checkbox(&mut en, "启用此引擎");
                         STATE.lock().unwrap().config_edit.engines.engines[i].enabled = en;
-                        ui.separator();
-                        ui.label("类型:");
+                    });
+
+                    // 类型
+                    form_row(ui, "类型", |ui| {
                         let mut kind_val = kind;
                         ui.horizontal(|ui| {
                             for k in crate::translate::EngineKind::all() {

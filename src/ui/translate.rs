@@ -99,10 +99,15 @@ pub fn draw_translate(ctx: &egui::Context) {
 
                 ui.separator();
 
-                // 右侧：设置按钮
+                // 右侧：历史 + 设置按钮
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     if ui.button("⚙ 设置").clicked() {
                         crate::ui::state::show_settings_window();
+                    }
+                    if ui.button("📜 历史").clicked() {
+                        log::info!("[translate] 历史按钮点击");
+                        let mut s = STATE.lock().unwrap();
+                        s.show_history = !s.show_history;
                     }
                 });
             });
@@ -310,6 +315,7 @@ pub fn draw_translate(ctx: &egui::Context) {
         });
 }
 
+
 fn lang_combo(ui: &mut egui::Ui, id: &str, is_from: bool) {
     let (current, is_from_confirmed) = match id {
         "from_lang_combo" => {
@@ -382,7 +388,15 @@ pub(crate) fn do_translate(text: &str, from: &str, to: &str, engine_index: usize
 
     let mut s = STATE.lock().unwrap();
     s.translating = false;
-    s.result = Some(result.map_err(|e| e.to_string()));
+    match &result {
+        Ok(r) => {
+            crate::history::add_entry(&text, &r.text, from, to, &engine.name);
+            s.result = Some(Ok(r.clone()));
+        }
+        Err(e) => {
+            s.result = Some(Err(e.to_string()));
+        }
+    }
 }
 
 pub(crate) fn show_toast(ctx: &egui::Context, msg: &str) {

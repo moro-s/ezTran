@@ -121,6 +121,16 @@ impl eframe::App for EzTranApp {
             ui::draw_settings(ctx);
         }
 
+        // 翻译历史弹窗
+        {
+            let show_history = ui::state::STATE.lock().unwrap().show_history;
+            if show_history {
+                log::info!("[update] 调用 draw_history");
+                ui::history::draw_history(ctx);
+                log::info!("[update] draw_history 返回");
+            }
+        }
+
         // 执行延迟隐藏
         if window::process_pending_hide() {
             log::debug!("[update] process_pending_hide 已处理，跳过本帧绘制");

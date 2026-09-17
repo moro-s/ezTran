@@ -40,6 +40,8 @@ pub struct AppState {
     pub config_edit: AppConfig,
     /// 设置窗口当前选中的标签页
     pub settings_tab: SettingsTab,
+    /// 是否显示翻译历史窗口
+    pub show_history: bool,
 }
 
 /// 全局状态
