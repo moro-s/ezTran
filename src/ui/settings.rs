@@ -4,6 +4,8 @@ use crate::ui::translate::show_toast;
 
 /// 绘制设置页面（独立 OS 窗口）
 pub fn draw_settings(ctx: &egui::Context) {
+    log::info!("[settings] draw_settings 被调用，创建/更新设置视口");
+
     // toast 自动消失
     {
         let mut state = STATE.lock().unwrap();

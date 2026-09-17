@@ -47,13 +47,16 @@ pub fn set_ctx(ctx: &egui::Context) {
     *EGUI_CTX.lock().unwrap() = Some(ctx.clone());
 }
 
-/// 唤醒 winit 事件循环（窗口隐藏后 request_repaint 无效，需 PostMessage）
+/// 唤醒 winit 事件循环（窗口隐藏后 request_repaint 无效，需强制触发 WM_PAINT）
 pub fn wake() {
     if let Some(ctx) = EGUI_CTX.lock().unwrap().as_ref() {
         ctx.request_repaint();
     }
     #[cfg(windows)]
-    post_message(WM_NULL, 0, 0);
+    {
+        post_message(WM_NULL, 0, 0);
+        force_redraw();
+    }
 }
 
 /// 后台守护线程入口：定期唤醒事件循环，防止窗口隐藏后托盘事件无法处理
@@ -206,6 +209,8 @@ const GWL_EXSTYLE: i32 = -20;
 #[cfg(windows)]
 const WS_EX_TOOLWINDOW: u32 = 0x00000080;
 #[cfg(windows)]
+const WS_EX_APPWINDOW: u32 = 0x00040000;
+#[cfg(windows)]
 const SWP_NOZORDER: u32 = 0x0004;
 #[cfg(windows)]
 const SWP_NOACTIVATE: u32 = 0x0010;
@@ -234,7 +239,7 @@ fn show_window(cmd: i32) {
     }
 }
 
-/// 将主窗口移到屏幕外并从任务栏隐藏（替代 SW_HIDE，保持事件循环活跃）
+/// 隐藏主窗口：移到屏幕外 + 从任务栏隐藏（不用分层窗口，避免 OpenGL 黑屏）
 #[cfg(windows)]
 fn move_offscreen() {
     use std::ffi::c_void;
@@ -255,7 +260,7 @@ fn move_offscreen() {
 
     let hwnd = find_hwnd();
     if hwnd.is_null() {
-        log::warn!("[window] move_offscreen — find_hwnd 返回空句柄，放弃");
+        log::warn!("[window] hide — find_hwnd 返回空句柄，放弃");
         return;
     }
 
@@ -269,17 +274,18 @@ fn move_offscreen() {
         };
         GetWindowRect(hwnd, &mut rect);
         log::info!(
-            "[window] move_offscreen — 保存窗口位置 rect=({},{},{},{})",
+            "[window] hide — 保存窗口位置 rect=({},{},{},{})",
             rect.left, rect.top, rect.right, rect.bottom
         );
         *SAVED_RECT.lock().unwrap() = Some(rect);
 
-        // 添加 WS_EX_TOOLWINDOW：从任务栏和 Alt+Tab 隐藏
+        // 添加 WS_EX_TOOLWINDOW + 移除 WS_EX_APPWINDOW：从任务栏和 Alt+Tab 隐藏
         let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32;
-        SetWindowLongPtrW(hwnd, GWL_EXSTYLE, (ex | WS_EX_TOOLWINDOW) as isize);
+        let new_ex = (ex & !WS_EX_APPWINDOW) | WS_EX_TOOLWINDOW;
+        SetWindowLongPtrW(hwnd, GWL_EXSTYLE, new_ex as isize);
+        log::info!("[window] hide — ex_style: 0x{:08X} -> 0x{:08X}", ex, new_ex);
 
-        // 移到屏幕外（-32000 是 Windows 约定的屏幕外坐标），
-        // SWP_FRAMECHANGE 让扩展样式变更立即生效
+        // 移到屏幕外（-32000 是 Windows 约定的屏幕外坐标）
         let w = rect.right - rect.left;
         let h = rect.bottom - rect.top;
         SetWindowPos(
@@ -291,11 +297,11 @@ fn move_offscreen() {
             h,
             SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGE,
         );
-        log::info!("[window] move_offscreen — 已移至屏幕外并设置 WS_EX_TOOLWINDOW");
+        log::info!("[window] hide — 已移至屏幕外 + WS_EX_TOOLWINDOW");
     }
 }
 
-/// 将主窗口从屏幕外移回原位置并恢复任务栏显示
+/// 恢复主窗口：从屏幕外移回原位置 + 恢复任务栏显示 + 置于最前
 #[cfg(windows)]
 fn restore_from_offscreen() {
     use std::ffi::c_void;
@@ -311,18 +317,22 @@ fn restore_from_offscreen() {
         ) -> i32;
         fn GetWindowLongPtrW(hwnd: *mut c_void, index: i32) -> isize;
         fn SetWindowLongPtrW(hwnd: *mut c_void, index: i32, value: isize) -> isize;
+        fn SetForegroundWindow(hwnd: *mut c_void) -> i32;
+        fn BringWindowToTop(hwnd: *mut c_void) -> i32;
     }
 
     let hwnd = find_hwnd();
     if hwnd.is_null() {
-        log::warn!("[window] restore_from_offscreen — find_hwnd 返回空句柄，放弃");
+        log::warn!("[window] restore — find_hwnd 返回空句柄，放弃");
         return;
     }
 
     unsafe {
-        // 移除 WS_EX_TOOLWINDOW：恢复任务栏显示
+        // 移除 WS_EX_TOOLWINDOW，恢复 WS_EX_APPWINDOW
         let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32;
-        SetWindowLongPtrW(hwnd, GWL_EXSTYLE, (ex & !WS_EX_TOOLWINDOW) as isize);
+        let new_ex = (ex & !WS_EX_TOOLWINDOW) | WS_EX_APPWINDOW;
+        SetWindowLongPtrW(hwnd, GWL_EXSTYLE, new_ex as isize);
+        log::info!("[window] restore — ex_style: 0x{:08X} -> 0x{:08X}", ex, new_ex);
 
         // 移回原位置
         if let Some(rect) = *SAVED_RECT.lock().unwrap() {
@@ -338,12 +348,16 @@ fn restore_from_offscreen() {
                 SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGE,
             );
             log::info!(
-                "[window] restore_from_offscreen — 恢复至 ({},{},{},{})",
+                "[window] restore — 恢复至 ({},{},{},{})",
                 rect.left, rect.top, rect.right, rect.bottom
             );
         } else {
-            log::warn!("[window] restore_from_offscreen — SAVED_RECT 为空，无位置可恢复");
+            log::warn!("[window] restore — SAVED_RECT 为空，无位置可恢复");
         }
+
+        // 强制置于最前（解决恢复后偶尔不在最上层的问题）
+        SetForegroundWindow(hwnd);
+        BringWindowToTop(hwnd);
     }
 }
 
@@ -356,6 +370,8 @@ fn post_message(msg: u32, wparam: usize, lparam: isize) {
     let hwnd = find_hwnd();
     if !hwnd.is_null() {
         unsafe { PostMessageW(hwnd, msg, wparam, lparam) };
+    } else {
+        log::warn!("[window] post_message — find_hwnd 返回空句柄，无法 PostMessage");
     }
 }
 
@@ -368,6 +384,32 @@ fn send_message(msg: u32, wparam: usize, lparam: isize) {
     let hwnd = find_hwnd();
     if !hwnd.is_null() {
         unsafe { SendMessageW(hwnd, msg, wparam, lparam) };
+    }
+}
+
+/// 强制触发 WM_PAINT（RDW_INTERNALPAINT），让 winit 产生 RedrawRequested → eframe update
+#[cfg(windows)]
+fn force_redraw() {
+    use std::ffi::c_void;
+    extern "system" {
+        fn RedrawWindow(
+            hwnd: *mut c_void,
+            lprc_update: *const c_void,
+            hrgn_update: *const c_void,
+            flags: u32,
+        ) -> i32;
+    }
+    const RDW_INTERNALPAINT: u32 = 0x0002;
+    let hwnd = find_hwnd();
+    if !hwnd.is_null() {
+        unsafe {
+            RedrawWindow(
+                hwnd,
+                std::ptr::null(),
+                std::ptr::null(),
+                RDW_INTERNALPAINT,
+            )
+        };
     }
 }
 

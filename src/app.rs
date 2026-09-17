@@ -55,6 +55,7 @@ impl EzTranApp {
                 // 只弹出设置窗口，不恢复翻译工作台
                 ui::show_settings_window();
                 window::wake();
+                log::logger().flush();
                 return;
             }
             if TRANSLATE_MENU_ID.lock().unwrap().as_ref().is_some_and(|tid| id == tid) {
@@ -94,7 +95,9 @@ impl eframe::App for EzTranApp {
 
         // 设置窗口（独立视口，主窗口隐藏时也需渲染）
         let settings_visible = ui::is_settings_visible();
+        let main_hidden = window::is_main_hidden();
         if settings_visible {
+            log::info!("[update] 调用 draw_settings (main_hidden={})", main_hidden);
             ui::draw_settings(ctx);
         }
 
