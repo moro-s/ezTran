@@ -76,8 +76,9 @@ pub fn draw_history(ctx: &egui::Context) {
                                 ui.add_space(2.0);
                                 ui.label(
                                     egui::RichText::new(format!(
-                                        "{} → {} · {}",
-                                        entry.from, entry.to, entry.engine
+                                        "{} → {} · {} · {}",
+                                        entry.from, entry.to, entry.engine,
+                                        format_timestamp(entry.timestamp)
                                     ))
                                     .small()
                                     .color(crate::theme::history_meta()),
@@ -109,4 +110,12 @@ pub fn draw_history(ctx: &egui::Context) {
         s.to_lang = to;
         s.show_history = false;
     }
+}
+
+/// 将 Unix 秒格式化为 HH:MM 显示
+fn format_timestamp(ts: u64) -> String {
+    let dt = chrono::DateTime::from_timestamp(ts as i64, 0)
+        .map(|t| t.with_timezone(&chrono::Local))
+        .map(|t| t.format("%H:%M").to_string());
+    dt.unwrap_or_else(|| "--:--".into())
 }

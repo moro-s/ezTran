@@ -501,6 +501,15 @@ pub fn error_text() -> egui::Color32 {
     }
 }
 
+/// toast 成功提示文字色
+pub fn toast_color() -> egui::Color32 {
+    if is_light() {
+        egui::Color32::from_rgb(60, 160, 60)
+    } else {
+        egui::Color32::from_rgb(120, 200, 120)
+    }
+}
+
 /// 置顶按钮遮罩色
 pub fn pin_overlay() -> egui::Color32 {
     if is_light() {

@@ -1,20 +1,13 @@
 use crate::config::{AppConfig, LANGUAGES};
 use crate::ui::state::{SettingsTab, STATE};
-use crate::ui::translate::show_toast;
+use crate::ui::translate::{render_toast, show_toast, update_toast};
 
 /// 绘制设置页面（独立 OS 窗口）
 pub fn draw_settings(ctx: &egui::Context) {
     log::debug!("[settings] draw_settings 被调用，创建/更新设置视口");
 
     // toast 自动消失
-    {
-        let mut state = STATE.lock().unwrap();
-        if let Some(toast_time) = state.toast.as_ref().map(|_| state.toast_time) {
-            if ctx.input(|i| i.time) - toast_time > 3.0 {
-                state.toast = None;
-            }
-        }
-    }
+    update_toast(ctx);
 
     ctx.show_viewport_immediate(
         egui::ViewportId::from_hash_of("settings"),
@@ -225,11 +218,7 @@ fn settings_general(ui: &mut egui::Ui) {
     });
 
     // toast 提示
-    let toast = STATE.lock().unwrap().toast.clone();
-    if let Some(ref t) = toast {
-        ui.add_space(6.0);
-        ui.colored_label(egui::Color32::from_rgb(120, 200, 120), t);
-    }
+    render_toast(ui);
 }
 
 // ── 翻译服务 ──
@@ -367,11 +356,7 @@ fn settings_engines(ui: &mut egui::Ui) {
         }
     });
 
-    let toast = STATE.lock().unwrap().toast.clone();
-    if let Some(ref t) = toast {
-        ui.add_space(6.0);
-        ui.colored_label(egui::Color32::from_rgb(120, 200, 120), t);
-    }
+    render_toast(ui);
 }
 
 // ── 关于 ──
@@ -413,11 +398,7 @@ fn settings_about(ui: &mut egui::Ui) {
         }
     });
 
-    let toast = STATE.lock().unwrap().toast.clone();
-    if let Some(ref t) = toast {
-        ui.add_space(6.0);
-        ui.colored_label(egui::Color32::from_rgb(120, 200, 120), t);
-    }
+    render_toast(ui);
 }
 
 fn lang_combo_settings(ui: &mut egui::Ui, id: &str, include_auto: bool) {

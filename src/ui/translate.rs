@@ -6,14 +6,7 @@ use egui::TextStyle;
 /// 绘制翻译工作台
 pub fn draw_translate(ctx: &egui::Context) {
     // toast 自动消失（3 秒）
-    {
-        let mut state = STATE.lock().unwrap();
-        if let Some(toast_time) = state.toast.as_ref().map(|_| state.toast_time) {
-            if ctx.input(|i| i.time) - toast_time > 3.0 {
-                state.toast = None;
-            }
-        }
-    }
+    update_toast(ctx);
 
     // Esc 键最小化翻译工作台
     if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
@@ -402,4 +395,23 @@ pub(crate) fn show_toast(ctx: &egui::Context, msg: &str) {
     let mut s = STATE.lock().unwrap();
     s.toast = Some(msg.into());
     s.toast_time = ctx.input(|i| i.time);
+}
+
+/// toast 自动消失检查（3 秒后清除），在每帧绘制开始时调用
+pub(crate) fn update_toast(ctx: &egui::Context) {
+    let mut state = STATE.lock().unwrap();
+    if let Some(toast_time) = state.toast.as_ref().map(|_| state.toast_time) {
+        if ctx.input(|i| i.time) - toast_time > 3.0 {
+            state.toast = None;
+        }
+    }
+}
+
+/// 渲染 toast 提示（如果存在），在 UI 底部调用
+pub(crate) fn render_toast(ui: &mut egui::Ui) {
+    let toast = STATE.lock().unwrap().toast.clone();
+    if let Some(ref t) = toast {
+        ui.add_space(6.0);
+        ui.colored_label(crate::theme::toast_color(), t);
+    }
 }

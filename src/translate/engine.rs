@@ -83,13 +83,3 @@ impl Default for EngineManager {
         }
     }
 }
-
-impl EngineManager {
-    pub fn default_engine(&self) -> Option<&EngineConfig> {
-        self.engines.get(self.default_index)
-    }
-
-    pub fn enabled_engines(&self) -> Vec<&EngineConfig> {
-        self.engines.iter().filter(|e| e.enabled).collect()
-    }
-}
