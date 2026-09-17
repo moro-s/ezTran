@@ -5,11 +5,15 @@
 // 支持的格式: "Ctrl+Shift+T", "Ctrl+Enter", "Alt+F1" 等
 
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::Mutex;
 
 // ── 全局触发标志 ──
 
 static TRIGGER_INPUT_TRANSLATE: AtomicBool = AtomicBool::new(false);
 static TRIGGER_SELECTION_TRANSLATE: AtomicBool = AtomicBool::new(false);
+
+/// 划词翻译获取到的选中文本（由热键线程写入，update 中消费）
+static SELECTION_TEXT: Mutex<Option<String>> = Mutex::new(None);
 
 /// 标记需要触发输入翻译（由全局热键线程设置，update 中消费）
 pub fn request_input_translate() {
@@ -29,6 +33,11 @@ pub fn request_selection_translate() {
 /// 消费划词翻译请求（返回 true 表示需要执行）
 pub fn consume_selection_translate() -> bool {
     TRIGGER_SELECTION_TRANSLATE.swap(false, Ordering::SeqCst)
+}
+
+/// 取出热键线程已获取的选中文本（消费后清空）
+pub fn take_selection_text() -> Option<String> {
+    SELECTION_TEXT.lock().unwrap().take()
 }
 
 // ── 快捷键解析 ──
@@ -126,6 +135,9 @@ mod win {
     pub const INPUT_KEYBOARD: u32 = 1;
     pub const KEYEVENTF_KEYUP: u32 = 0x0002;
     pub const VK_CONTROL: u16 = 0x11;
+    pub const VK_SHIFT: u16 = 0x10;
+    pub const VK_MENU: u16 = 0x12;   // Alt
+    pub const VK_LWIN: u16 = 0x5B;
     pub const VK_C: u16 = 0x43;
 
     #[repr(C)]
@@ -351,6 +363,14 @@ fn hotkey_thread() {
                         }
                         win::HOTKEY_ID_SELECTION => {
                             log::info!("[hotkey] WM_HOTKEY — 划词翻译");
+                            // 在热键线程中立即执行模拟复制（此时前台窗口仍是用户选中文本的应用）
+                            let text = simulate_copy_and_get_clipboard();
+                            if let Some(ref t) = text {
+                                log::info!("[hotkey] 划词翻译 — 已获取选中文本 ({} 字符)", t.len());
+                            } else {
+                                log::warn!("[hotkey] 划词翻译 — 未获取到选中文本");
+                            }
+                            *SELECTION_TEXT.lock().unwrap() = text;
                             request_selection_translate();
                         }
                         _ => {
@@ -408,8 +428,28 @@ pub fn reregister_hotkeys() {
 
 // ── 划词翻译：模拟 Ctrl+C 获取选中文本 ──
 
+/// 构造一个键盘 INPUT 结构体
+#[cfg(windows)]
+fn make_key_input(vk: u16, flags: u32) -> win::INPUT {
+    win::INPUT {
+        type_: win::INPUT_KEYBOARD,
+        u: win::INPUT_UNION {
+            ki: win::KEYBDINPUT {
+                w_vk: vk,
+                w_scan: 0,
+                dw_flags: flags,
+                time: 0,
+                dw_extra_info: 0,
+            },
+        },
+    }
+}
+
 /// 模拟 Ctrl+C 复制当前选中文本，从剪贴板读取并返回。
 /// 保留用户原有剪贴板内容，操作完成后恢复。
+///
+/// 注意：热键触发时用户仍按住修饰键（如 Ctrl+Shift），需要先释放所有修饰键，
+/// 再模拟 Ctrl+C，否则 Shift 会干扰复制操作。
 pub fn simulate_copy_and_get_clipboard() -> Option<String> {
     // 保存旧剪贴板内容
     let old_clip = arboard::Clipboard::new()
@@ -421,65 +461,33 @@ pub fn simulate_copy_and_get_clipboard() -> Option<String> {
         let _ = clipboard.set_text("");
     }
 
-    // 模拟 Ctrl+C
     #[cfg(windows)]
     unsafe {
-        let inputs: [win::INPUT; 4] = [
-            win::INPUT {
-                type_: win::INPUT_KEYBOARD,
-                u: win::INPUT_UNION {
-                    ki: win::KEYBDINPUT {
-                        w_vk: win::VK_CONTROL,
-                        w_scan: 0,
-                        dw_flags: 0,
-                        time: 0,
-                        dw_extra_info: 0,
-                    },
-                },
-            },
-            win::INPUT {
-                type_: win::INPUT_KEYBOARD,
-                u: win::INPUT_UNION {
-                    ki: win::KEYBDINPUT {
-                        w_vk: win::VK_C,
-                        w_scan: 0,
-                        dw_flags: 0,
-                        time: 0,
-                        dw_extra_info: 0,
-                    },
-                },
-            },
-            win::INPUT {
-                type_: win::INPUT_KEYBOARD,
-                u: win::INPUT_UNION {
-                    ki: win::KEYBDINPUT {
-                        w_vk: win::VK_C,
-                        w_scan: 0,
-                        dw_flags: win::KEYEVENTF_KEYUP,
-                        time: 0,
-                        dw_extra_info: 0,
-                    },
-                },
-            },
-            win::INPUT {
-                type_: win::INPUT_KEYBOARD,
-                u: win::INPUT_UNION {
-                    ki: win::KEYBDINPUT {
-                        w_vk: win::VK_CONTROL,
-                        w_scan: 0,
-                        dw_flags: win::KEYEVENTF_KEYUP,
-                        time: 0,
-                        dw_extra_info: 0,
-                    },
-                },
-            },
+        // 1. 释放所有可能按下的修饰键
+        let release_mods: [win::INPUT; 4] = [
+            make_key_input(win::VK_CONTROL, win::KEYEVENTF_KEYUP),
+            make_key_input(win::VK_SHIFT, win::KEYEVENTF_KEYUP),
+            make_key_input(win::VK_MENU, win::KEYEVENTF_KEYUP),   // Alt
+            make_key_input(win::VK_LWIN, win::KEYEVENTF_KEYUP),   // Win
         ];
-        let sent = win::SendInput(4, inputs.as_ptr(), std::mem::size_of::<win::INPUT>() as i32);
-        log::debug!("[hotkey] SendInput 发送 {} 个按键事件", sent);
+        win::SendInput(4, release_mods.as_ptr(), std::mem::size_of::<win::INPUT>() as i32);
+
+        // 短暂等待，确保修饰键释放生效
+        std::thread::sleep(std::time::Duration::from_millis(50));
+
+        // 2. 模拟 Ctrl+C
+        let copy_inputs: [win::INPUT; 4] = [
+            make_key_input(win::VK_CONTROL, 0),
+            make_key_input(win::VK_C, 0),
+            make_key_input(win::VK_C, win::KEYEVENTF_KEYUP),
+            make_key_input(win::VK_CONTROL, win::KEYEVENTF_KEYUP),
+        ];
+        let sent = win::SendInput(4, copy_inputs.as_ptr(), std::mem::size_of::<win::INPUT>() as i32);
+        log::debug!("[hotkey] SendInput Ctrl+C 发送 {} 个按键事件", sent);
     }
 
     // 等待剪贴板更新
-    std::thread::sleep(std::time::Duration::from_millis(100));
+    std::thread::sleep(std::time::Duration::from_millis(150));
 
     // 读取新内容
     let new_text = arboard::Clipboard::new()

@@ -15,6 +15,11 @@ pub fn draw_translate(ctx: &egui::Context) {
         }
     }
 
+    // Esc 键最小化翻译工作台
+    if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+        crate::window::minimize_main();
+    }
+
     // 面板背景色 #1E1E1E
     let panel_bg = egui::Color32::from_rgb(30, 30, 30);
     let panel_frame = egui::Frame::default()

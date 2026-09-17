@@ -144,9 +144,9 @@ impl eframe::App for EzTranApp {
     }
 }
 
-/// 划词翻译处理：模拟 Ctrl+C 获取选中文本 → 显示窗口 → 自动翻译
+/// 划词翻译处理：从热键线程获取选中文本 → 显示窗口 → 自动翻译
 fn handle_selection_translate(ctx: &egui::Context) {
-    let clip_text = hotkey::simulate_copy_and_get_clipboard();
+    let clip_text = hotkey::take_selection_text();
 
     window::show_main_if_hidden();
     window::wake();

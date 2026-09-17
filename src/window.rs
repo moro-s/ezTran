@@ -96,7 +96,56 @@ pub fn show_main_if_hidden() {
         #[cfg(windows)]
         restore_from_offscreen();
     } else {
-        log::debug!("[window] show_main_if_hidden — 主窗口未隐藏，无需恢复");
+        log::debug!("[window] show_main_if_hidden — 主窗口未隐藏，仅置顶");
+        #[cfg(windows)]
+        bring_to_front();
+    }
+}
+
+/// 将主窗口强制置于最前（绕过 Windows 前台窗口限制）
+#[cfg(windows)]
+pub fn bring_to_front() {
+    use std::ffi::c_void;
+    extern "system" {
+        fn GetForegroundWindow() -> *mut c_void;
+        fn GetWindowThreadProcessId(hwnd: *mut c_void, lpdw_process_id: *mut u32) -> u32;
+        fn GetCurrentThreadId() -> u32;
+        fn AttachThreadInput(id_attach: u32, id_attach_to: u32, f_attach: i32) -> i32;
+        fn SetForegroundWindow(hwnd: *mut c_void) -> i32;
+        fn BringWindowToTop(hwnd: *mut c_void) -> i32;
+        fn ShowWindow(hwnd: *mut c_void, cmd: i32) -> i32;
+    }
+
+    let hwnd = find_hwnd();
+    if hwnd.is_null() {
+        log::warn!("[window] bring_to_front — find_hwnd 返回空句柄");
+        return;
+    }
+
+    unsafe {
+        // 如果窗口被最小化，先恢复
+        ShowWindow(hwnd, SW_RESTORE);
+
+        // AttachThreadInput 技巧：将当前线程的输入队列与前台窗口的线程关联，
+        // 这样 SetForegroundWindow 就能绕过 Windows 的前台窗口限制
+        let fg_hwnd = GetForegroundWindow();
+        let fg_tid = if !fg_hwnd.is_null() {
+            GetWindowThreadProcessId(fg_hwnd, std::ptr::null_mut())
+        } else {
+            0
+        };
+        let cur_tid = GetCurrentThreadId();
+
+        if fg_tid != 0 && fg_tid != cur_tid {
+            AttachThreadInput(cur_tid, fg_tid, 1);
+            SetForegroundWindow(hwnd);
+            BringWindowToTop(hwnd);
+            AttachThreadInput(cur_tid, fg_tid, 0);
+        } else {
+            SetForegroundWindow(hwnd);
+            BringWindowToTop(hwnd);
+        }
+        log::info!("[window] bring_to_front — 已请求置顶 (fg_tid={})", fg_tid);
     }
 }
 
@@ -355,9 +404,31 @@ fn restore_from_offscreen() {
             log::warn!("[window] restore — SAVED_RECT 为空，无位置可恢复");
         }
 
-        // 强制置于最前（解决恢复后偶尔不在最上层的问题）
-        SetForegroundWindow(hwnd);
-        BringWindowToTop(hwnd);
+        // 强制置于最前（用 AttachThreadInput 绕过 Windows 前台窗口限制）
+        {
+            extern "system" {
+                fn GetForegroundWindow() -> *mut c_void;
+                fn GetWindowThreadProcessId(hwnd: *mut c_void, lpdw_process_id: *mut u32) -> u32;
+                fn GetCurrentThreadId() -> u32;
+                fn AttachThreadInput(id_attach: u32, id_attach_to: u32, f_attach: i32) -> i32;
+            }
+            let fg_hwnd = GetForegroundWindow();
+            let fg_tid = if !fg_hwnd.is_null() {
+                GetWindowThreadProcessId(fg_hwnd, std::ptr::null_mut())
+            } else {
+                0
+            };
+            let cur_tid = GetCurrentThreadId();
+            if fg_tid != 0 && fg_tid != cur_tid {
+                AttachThreadInput(cur_tid, fg_tid, 1);
+                SetForegroundWindow(hwnd);
+                BringWindowToTop(hwnd);
+                AttachThreadInput(cur_tid, fg_tid, 0);
+            } else {
+                SetForegroundWindow(hwnd);
+                BringWindowToTop(hwnd);
+            }
+        }
     }
 }
 
