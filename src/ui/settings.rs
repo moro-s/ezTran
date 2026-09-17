@@ -148,12 +148,10 @@ fn settings_general(ui: &mut egui::Ui) {
     // 翻译设置
     ui.label(egui::RichText::new("翻译设置").strong());
     ui.add_space(4.0);
-    ui.horizontal(|ui| {
-        ui.label("默认源语言:");
+    form_row(ui, "默认源语言", |ui| {
         lang_combo_settings(ui, "default_from_combo", true);
     });
-    ui.horizontal(|ui| {
-        ui.label("默认目标语言:");
+    form_row(ui, "默认目标语言", |ui| {
         lang_combo_settings(ui, "default_to_combo", false);
     });
     ui.add_space(10.0);
@@ -165,8 +163,7 @@ fn settings_general(ui: &mut egui::Ui) {
         ui.checkbox(&mut enabled, "输入翻译");
         STATE.lock().unwrap().config_edit.enable_input_translate = enabled;
         if enabled {
-            ui.horizontal(|ui| {
-                ui.label("    输入翻译快捷键:");
+            form_row(ui, "快捷键", |ui| {
                 let mut hk = STATE.lock().unwrap().config_edit.input_hotkey.clone();
                 crate::hotkey::hotkey_input(ui, "input_hotkey_field", &mut hk);
                 STATE.lock().unwrap().config_edit.input_hotkey = hk;
@@ -182,8 +179,7 @@ fn settings_general(ui: &mut egui::Ui) {
         ui.checkbox(&mut enabled, "划词翻译");
         STATE.lock().unwrap().config_edit.enable_selection_translate = enabled;
         if enabled {
-            ui.horizontal(|ui| {
-                ui.label("    划词翻译快捷键:");
+            form_row(ui, "快捷键", |ui| {
                 let mut hk = STATE.lock().unwrap().config_edit.selection_hotkey.clone();
                 crate::hotkey::hotkey_input(ui, "selection_hotkey_field", &mut hk);
                 STATE.lock().unwrap().config_edit.selection_hotkey = hk;
@@ -267,8 +263,7 @@ fn settings_engines(ui: &mut egui::Ui) {
             .show(ui, |ui| {
                 ui.vertical(|ui| {
                     // 名称
-                    ui.horizontal(|ui| {
-                        ui.label("名称:");
+                    form_row(ui, "名称", |ui| {
                         let mut name_buf = name;
                         ui.add(
                             egui::TextEdit::singleline(&mut name_buf).desired_width(200.0),
@@ -277,13 +272,11 @@ fn settings_engines(ui: &mut egui::Ui) {
                     });
 
                     // 启用 + 类型
-                    ui.horizontal(|ui| {
+                    form_row(ui, "启用", |ui| {
                         let mut en = enabled;
-                        ui.checkbox(&mut en, "启用");
+                        ui.checkbox(&mut en, "");
                         STATE.lock().unwrap().config_edit.engines.engines[i].enabled = en;
-
                         ui.separator();
-
                         ui.label("类型:");
                         let mut kind_val = kind;
                         ui.horizontal(|ui| {
@@ -295,8 +288,7 @@ fn settings_engines(ui: &mut egui::Ui) {
                     });
 
                     // API Key
-                    ui.horizontal(|ui| {
-                        ui.label("API Key:");
+                    form_row(ui, "API Key", |ui| {
                         let mut key_buf = api_key;
                         ui.add(
                             egui::TextEdit::singleline(&mut key_buf)
@@ -307,8 +299,7 @@ fn settings_engines(ui: &mut egui::Ui) {
                     });
 
                     // Secret
-                    ui.horizontal(|ui| {
-                        ui.label("Secret:");
+                    form_row(ui, "Secret", |ui| {
                         let mut secret_buf = api_secret;
                         ui.add(
                             egui::TextEdit::singleline(&mut secret_buf)
@@ -319,9 +310,8 @@ fn settings_engines(ui: &mut egui::Ui) {
                             secret_buf;
                     });
 
-                    // Endpoint + 删除
-                    ui.horizontal(|ui| {
-                        ui.label("Endpoint:");
+                    // Endpoint
+                    form_row(ui, "Endpoint", |ui| {
                         let mut ep_buf = endpoint;
                         ui.add(
                             egui::TextEdit::singleline(&mut ep_buf).desired_width(220.0),
@@ -464,4 +454,18 @@ fn lang_combo_settings(ui: &mut egui::Ui, id: &str, include_auto: bool) {
                 }
             }
         });
+}
+
+/// 表单行：左侧固定宽度 label，右侧填充输入控件，实现对齐
+fn form_row(ui: &mut egui::Ui, label_text: &str, add_content: impl FnOnce(&mut egui::Ui)) {
+    const LABEL_WIDTH: f32 = 90.0;
+    ui.horizontal(|ui| {
+        let label_resp = ui.add(
+            egui::Label::new(egui::RichText::new(label_text).strong())
+                .wrap(),
+        );
+        let pad = (LABEL_WIDTH - label_resp.rect.width()).max(0.0);
+        ui.add_space(pad);
+        add_content(ui);
+    });
 }

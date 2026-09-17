@@ -197,15 +197,6 @@ pub fn draw_translate(ctx: &egui::Context) {
                                     };
                                     do_translate(&text_buf, &from, &to, engine_idx, ctx);
                                 }
-
-                                // 快捷键触发翻译（由 hotkey 模块设置标志）
-                                if crate::hotkey::consume_input_translate() {
-                                    let (from, to, engine_idx) = {
-                                        let s = STATE.lock().unwrap();
-                                        (s.from_lang.clone(), s.to_lang.clone(), s.engine_index)
-                                    };
-                                    do_translate(&text_buf, &from, &to, engine_idx, ctx);
-                                }
                             });
                         });
                     },

@@ -93,13 +93,16 @@ impl eframe::App for EzTranApp {
         theme::setup_style(ctx);
 
         // 消费全局热键标志
-        // 输入翻译：窗口隐藏时恢复窗口（窗口显示时由翻译页面处理翻译）
-        if window::is_main_hidden() {
-            if hotkey::consume_input_translate() {
-                log::info!("[hotkey] 输入翻译快捷键触发（窗口隐藏）— 恢复窗口");
-                window::show_main_if_hidden();
-                window::wake();
+        // 输入翻译：唤起翻译工作台并清空上次内容
+        if hotkey::consume_input_translate() {
+            log::info!("[hotkey] 输入翻译快捷键触发 — 唤起工作台");
+            {
+                let mut s = crate::ui::state::STATE.lock().unwrap();
+                s.input_text.clear();
+                s.result = None;
             }
+            window::show_main_if_hidden();
+            window::wake();
         }
         // 划词翻译：获取选中文本 → 显示窗口 → 自动翻译
         if hotkey::consume_selection_translate() {
