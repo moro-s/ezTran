@@ -354,7 +354,7 @@ fn lang_combo(ui: &mut egui::Ui, id: &str, is_from: bool) {
         });
 }
 
-fn do_translate(text: &str, from: &str, to: &str, engine_index: usize, ctx: &egui::Context) {
+pub(crate) fn do_translate(text: &str, from: &str, to: &str, engine_index: usize, ctx: &egui::Context) {
     let text = text.trim().to_string();
     if text.is_empty() {
         return;

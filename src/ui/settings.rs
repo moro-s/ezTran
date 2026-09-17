@@ -207,15 +207,21 @@ fn settings_general(ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         if ui.button("💾 保存配置").clicked() {
             let mut s = STATE.lock().unwrap();
+            let mut saved_ok = false;
             match s.config_edit.save() {
                 Ok(()) => {
                     s.toast = Some("配置已保存".into());
+                    saved_ok = true;
                 }
                 Err(e) => {
                     s.toast = Some(format!("保存失败: {}", e));
                 }
             }
             s.toast_time = ui.input(|i| i.time);
+            drop(s);
+            if saved_ok {
+                crate::hotkey::reregister_hotkeys();
+            }
         }
         if ui.button("↩ 恢复默认").clicked() {
             STATE.lock().unwrap().config_edit = AppConfig::default();
@@ -351,15 +357,21 @@ fn settings_engines(ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
         if ui.button("💾 保存配置").clicked() {
             let mut s = STATE.lock().unwrap();
+            let mut saved_ok = false;
             match s.config_edit.save() {
                 Ok(()) => {
                     s.toast = Some("配置已保存".into());
+                    saved_ok = true;
                 }
                 Err(e) => {
                     s.toast = Some(format!("保存失败: {}", e));
                 }
             }
             s.toast_time = ui.input(|i| i.time);
+            drop(s);
+            if saved_ok {
+                crate::hotkey::reregister_hotkeys();
+            }
         }
     });
 

@@ -78,6 +78,7 @@ impl EzTranApp {
         }));
 
         window::start_repaint_thread();
+        hotkey::start_global_hotkey_thread();
 
         EzTranApp { _tray: tray }
     }
@@ -91,8 +92,20 @@ impl eframe::App for EzTranApp {
         theme::setup_fonts(ctx);
         theme::setup_style(ctx);
 
-        // 检测应用内快捷键
-        hotkey::check_app_hotkeys(ctx);
+        // 消费全局热键标志
+        // 输入翻译：窗口隐藏时恢复窗口（窗口显示时由翻译页面处理翻译）
+        if window::is_main_hidden() {
+            if hotkey::consume_input_translate() {
+                log::info!("[hotkey] 输入翻译快捷键触发（窗口隐藏）— 恢复窗口");
+                window::show_main_if_hidden();
+                window::wake();
+            }
+        }
+        // 划词翻译：获取选中文本 → 显示窗口 → 自动翻译
+        if hotkey::consume_selection_translate() {
+            log::info!("[hotkey] 划词翻译快捷键触发");
+            handle_selection_translate(ctx);
+        }
 
         // Alt+F4 → 隐藏到托盘
         window::handle_close_request(ctx);
@@ -128,6 +141,28 @@ impl eframe::App for EzTranApp {
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
         self._tray.take();
+    }
+}
+
+/// 划词翻译处理：模拟 Ctrl+C 获取选中文本 → 显示窗口 → 自动翻译
+fn handle_selection_translate(ctx: &egui::Context) {
+    let clip_text = hotkey::simulate_copy_and_get_clipboard();
+
+    window::show_main_if_hidden();
+    window::wake();
+
+    if let Some(text) = clip_text {
+        if !text.trim().is_empty() {
+            {
+                let mut s = crate::ui::state::STATE.lock().unwrap();
+                s.input_text = text.clone();
+            }
+            let (from, to, engine_idx) = {
+                let s = crate::ui::state::STATE.lock().unwrap();
+                (s.from_lang.clone(), s.to_lang.clone(), s.engine_index)
+            };
+            crate::ui::translate::do_translate(&text, &from, &to, engine_idx, ctx);
+        }
     }
 }
 
