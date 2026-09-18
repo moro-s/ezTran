@@ -77,3 +77,19 @@ pub fn hide_settings_window() {
 pub fn is_settings_visible() -> bool {
     STATE.lock().unwrap().show_settings
 }
+
+/// 打开历史窗口
+pub fn show_history_window() {
+    crate::ui::history::reset_shown();
+    STATE.lock().unwrap().show_history = true;
+}
+
+/// 关闭历史窗口
+pub fn hide_history_window() {
+    STATE.lock().unwrap().show_history = false;
+}
+
+/// 历史窗口是否应该显示
+pub fn is_history_visible() -> bool {
+    STATE.lock().unwrap().show_history
+}

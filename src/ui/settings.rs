@@ -6,9 +6,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 /// 标记设置窗口需要居中（打开时设置，视口首次渲染时消费）
 static SETTINGS_NEED_CENTER: AtomicBool = AtomicBool::new(true);
 
+/// 标记设置窗口已首帧渲染完毕（用于消除闪屏）
+static SETTINGS_SHOWN: AtomicBool = AtomicBool::new(false);
+
 /// 请求设置窗口下次渲染时居中
 pub fn request_center() {
     SETTINGS_NEED_CENTER.store(true, Ordering::SeqCst);
+    SETTINGS_SHOWN.store(false, Ordering::SeqCst);
 }
 
 /// 绘制设置页面（独立 OS 窗口）
@@ -36,11 +40,12 @@ pub fn draw_settings(ctx: &egui::Context) {
             .with_title("设置")
             .with_inner_size([win_w, win_h])
             .with_min_inner_size([500.0, 360.0])
-            .with_position(center_pos),
-        |ctx, _class| {
+            .with_position(center_pos)
+            .with_visible(false),
+        |ui, _class| {
             // 关闭按钮 → 隐藏设置窗口
-            if ctx.input(|i| i.viewport().close_requested()) {
-                ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
+            if ui.ctx().input(|i| i.viewport().close_requested()) {
+                ui.ctx().send_viewport_cmd(egui::ViewportCommand::CancelClose);
                 crate::ui::state::hide_settings_window();
                 return;
             }
@@ -53,10 +58,10 @@ pub fn draw_settings(ctx: &egui::Context) {
                     ((sh as f32 - win_h) / 2.0).max(0.0),
                 );
                 log::info!("[settings] 发送居中命令 OuterPosition=({:.0},{:.0}) screen={}x{}", pos.x, pos.y, sw, sh);
-                ctx.send_viewport_cmd(egui::ViewportCommand::OuterPosition(pos));
+                ui.ctx().send_viewport_cmd(egui::ViewportCommand::OuterPosition(pos));
             }
 
-            egui::CentralPanel::default().show(ctx, |ui| {
+            egui::CentralPanel::default().show(ui, |ui| {
                 ui.horizontal_top(|ui| {
                     // ── 左侧菜单 ──
                     let menu_w = 140.0;
@@ -103,7 +108,12 @@ pub fn draw_settings(ctx: &egui::Context) {
             });
 
             // 自动保存：每帧检测配置变更，有变化则自动保存
-            auto_save_config(ctx);
+            auto_save_config(ui.ctx());
+
+            // 首帧渲染完毕，显示窗口（消除闪屏）
+            if !SETTINGS_SHOWN.swap(true, Ordering::SeqCst) {
+                ui.ctx().send_viewport_cmd(egui::ViewportCommand::Visible(true));
+            }
         },
     );
 }

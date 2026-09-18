@@ -86,7 +86,7 @@ impl EzTranApp {
 }
 
 impl eframe::App for EzTranApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         window::set_ctx(ctx);
         window::try_set_round_corners();
 
@@ -122,17 +122,23 @@ impl eframe::App for EzTranApp {
             ui::draw_settings(ctx);
         }
 
-        // 翻译历史弹窗
-        {
-            let show_history = ui::state::STATE.lock().unwrap().show_history;
-            if show_history {
-                ui::history::draw_history(ctx);
-            }
+        // 翻译历史窗口（独立视口）
+        if ui::is_history_visible() {
+            ui::history::draw_history(ctx);
         }
 
         // 执行延迟隐藏
         if window::process_pending_hide() {
             log::debug!("[update] process_pending_hide 已处理，跳过本帧绘制");
+        }
+
+        // 首次启动将主窗口居中
+        center_main_window_on_first_launch(ctx);
+    }
+
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        // 执行延迟隐藏
+        if window::process_pending_hide() {
             return;
         }
 
@@ -142,19 +148,16 @@ impl eframe::App for EzTranApp {
         }
 
         // 窗口尺寸未就绪时跳过绘制
-        let screen = ctx.screen_rect();
+        let screen = ui.ctx().input(|i| i.viewport().inner_rect.unwrap_or(egui::Rect::ZERO));
         if screen.height() < 80.0 || screen.width() < 10.0 {
             return;
         }
 
-        // 首次启动将主窗口居中
-        center_main_window_on_first_launch(ctx);
-
-        draw_titlebar(ctx);
-        ui::draw_translate(ctx);
+        draw_titlebar(ui);
+        ui::draw_translate(ui);
 
         // 无边框窗口边框缩放（在所有面板绘制之后，用透明交互区覆盖窗口边缘）
-        draw_resize_borders(ctx);
+        draw_resize_borders(ui);
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
@@ -216,6 +219,7 @@ fn get_icon_texture(ctx: &egui::Context) -> egui::TextureHandle {
         "titlebar_icon",
         egui::ColorImage {
             size: [w as usize, h as usize],
+            source_size: egui::Vec2::new(w as f32, h as f32),
             pixels: rgba
                 .chunks_exact(4)
                 .map(|c| egui::Color32::from_rgba_unmultiplied(c[0], c[1], c[2], c[3]))
@@ -228,29 +232,25 @@ fn get_icon_texture(ctx: &egui::Context) -> egui::TextureHandle {
 }
 
 /// 绘制自绘标题栏（置顶 / 最小化 / 最大化 / 关闭）
-fn draw_titlebar(ctx: &egui::Context) {
+fn draw_titlebar(ui: &mut egui::Ui) {
+    let ctx = ui.ctx().clone();
     let titlebar_bg = theme::titlebar_bg();
-    egui::TopBottomPanel::top("custom_titlebar")
-        .exact_height(34.0)
+    egui::Panel::top("custom_titlebar")
+        .exact_size(34.0)
         .frame(
             egui::Frame::default()
                 .fill(titlebar_bg)
                 .inner_margin(egui::Margin::same(0))
-                .corner_radius(egui::CornerRadius {
-                    nw: 8,
-                    ne: 8,
-                    sw: 0,
-                    se: 0,
-                }),
+                .corner_radius(egui::CornerRadius::ZERO),
         )
-        .show(ctx, |ui| {
+        .show(ui, |ui| {
             ui.set_min_height(34.0);
             ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
 
             ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                 // ── 左侧图标 ──
                 ui.add_space(8.0);
-                let tex = get_icon_texture(ctx);
+                let tex = get_icon_texture(&ctx);
                 let img_resp = ui.add(
                     egui::Image::from_texture(&tex).fit_to_exact_size(egui::vec2(18.0, 18.0)),
                 );
@@ -331,7 +331,7 @@ fn titlebar_button(
         let a = (alpha * c.a() as f32) as u8;
         ui.painter().rect_filled(
             resp.rect,
-            6.0,
+            0.0,
             egui::Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), a),
         );
     }
@@ -353,7 +353,7 @@ fn titlebar_button_red(ui: &mut egui::Ui, icon: &str) -> egui::Response {
         let a = (alpha * 255.0) as u8;
         ui.painter().rect_filled(
             resp.rect,
-            6.0,
+            0.0,
             egui::Color32::from_rgba_unmultiplied(232, 17, 35, a),
         );
     }
@@ -407,10 +407,11 @@ fn draw_titlebar_btn_anim(
 /// 绘制无边框窗口的角落缩放手柄。
 /// 仅在窗口四个角放置小交互区，hover 时在该角对应的两条边框上绘制蓝色高亮，
 /// 拖拽时通过 WM_NCLBUTTONDOWN 让系统接管。
-fn draw_resize_borders(ctx: &egui::Context) {
+fn draw_resize_borders(ui: &mut egui::Ui) {
     use crate::window;
 
-    let screen = ctx.screen_rect();
+    let ctx = ui.ctx();
+    let screen = ctx.input(|i| i.viewport().inner_rect.unwrap_or(egui::Rect::ZERO));
     let corner_size = 16.0;
 
     // 最大化时不显示缩放手柄

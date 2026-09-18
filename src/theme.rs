@@ -274,7 +274,8 @@ pub fn setup_style(ctx: &egui::Context) {
 
     let base_size = font_size.size();
 
-    let mut style = (*ctx.style()).clone();
+    let current_theme = ctx.theme();
+    let mut style = (*ctx.style_of(current_theme)).clone();
     style.spacing.item_spacing = egui::vec2(6.0, 6.0);
     style.spacing.button_padding = egui::vec2(10.0, 4.0);
     style.spacing.window_margin = egui::Margin::same(0);
@@ -294,7 +295,7 @@ pub fn setup_style(ctx: &egui::Context) {
         (TextStyle::Small, FontId::new(base_size - 3.0, FontFamily::Proportional)),
     ]
     .into();
-    ctx.set_style(style);
+    ctx.set_style_of(current_theme, style);
 
     let mut vis = match theme {
         crate::config::AppTheme::Light => egui::Visuals::light(),

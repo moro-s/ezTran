@@ -9,8 +9,8 @@ name = "eztran"
 path = "src/main.rs"
 
 [dependencies]
-eframe = "0.31"
-egui = "0.31"
+eframe = { version = "0.36", default-features = false, features = ["default_fonts", "glow", "accesskit", "links", "wayland", "x11"] }
+egui = "0.36"
 minreq = { version = "2", features = ["https-rustls", "json-using-serde"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

@@ -5,12 +5,13 @@ use crate::ui::state::STATE;
 use egui::TextStyle;
 
 /// 绘制翻译工作台
-pub fn draw_translate(ctx: &egui::Context) {
+pub fn draw_translate(ui: &mut egui::Ui) {
+    let ctx = ui.ctx().clone();
     // toast 自动消失（3 秒）
-    update_toast(ctx);
+    update_toast(&ctx);
 
     // 翻译工作台 hover/active 控件圆角设为 0（不影响其他页面）
-    ctx.style_mut(|style| {
+    ctx.style_mut_of(ctx.theme(), |style| {
         let zero = egui::CornerRadius::ZERO;
         style.visuals.widgets.hovered.corner_radius = zero;
         style.visuals.widgets.active.corner_radius = zero;
@@ -37,7 +38,7 @@ pub fn draw_translate(ctx: &egui::Context) {
                     s.engine_index,
                 )
             };
-            do_translate(&text, &from, &to, engine_idx, ctx);
+            do_translate(&text, &from, &to, engine_idx, &ctx);
         }
     }
 
@@ -48,9 +49,9 @@ pub fn draw_translate(ctx: &egui::Context) {
         .inner_margin(egui::Margin::same(10));
 
     // ── 顶部工具栏 ──
-    egui::TopBottomPanel::top("translate_toolbar")
-        .exact_height(44.0)
-        .show(ctx, |ui| {
+    egui::Panel::top("translate_toolbar")
+        .exact_size(44.0)
+        .show(ui, |ui| {
             ui.add_space(5.0);
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing.x = 4.0;
@@ -125,8 +126,11 @@ pub fn draw_translate(ctx: &egui::Context) {
                         crate::ui::state::show_settings_window();
                     }
                     if ui.button("📜 历史").clicked() {
-                        let mut s = STATE.lock().unwrap();
-                        s.show_history = !s.show_history;
+                        if crate::ui::state::is_history_visible() {
+                            crate::ui::state::hide_history_window();
+                        } else {
+                            crate::ui::state::show_history_window();
+                        }
                     }
                 });
             });
@@ -140,7 +144,7 @@ pub fn draw_translate(ctx: &egui::Context) {
                 .fill(crate::theme::central_bg())
                 .inner_margin(egui::Margin::same(2)),
         )
-        .show(ctx, |ui| {
+        .show(ui, |ui| {
             let spacing = 2.0;
             let total = ui.available_width();
             let panel_w = ((total - spacing) / 2.0).max(100.0);
@@ -182,7 +186,7 @@ pub fn draw_translate(ctx: &egui::Context) {
                                                         s.engine_index,
                                                     )
                                                 };
-                                                do_translate(&text, &from, &to, engine_idx, ctx);
+                                                do_translate(&text, &from, &to, engine_idx, &ctx);
                                             }
 
                                             if ui.button("📋 粘贴").clicked() {
@@ -191,7 +195,7 @@ pub fn draw_translate(ctx: &egui::Context) {
                                                 {
                                                     if let Ok(text) = clipboard.get_text() {
                                                         STATE.lock().unwrap().input_text = text;
-                                                        show_toast(ctx, "已粘贴");
+                                                        show_toast(&ctx, "已粘贴");
                                                     }
                                                 }
                                             }
@@ -250,7 +254,7 @@ pub fn draw_translate(ctx: &egui::Context) {
                                                         arboard::Clipboard::new()
                                                     {
                                                         let _ = clip.set_text(r.text);
-                                                        show_toast(ctx, "已复制到剪贴板");
+                                                        show_toast(&ctx, "已复制到剪贴板");
                                                     }
                                                 }
                                             }
