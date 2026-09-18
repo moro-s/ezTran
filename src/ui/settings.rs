@@ -407,7 +407,7 @@ fn settings_about(ui: &mut egui::Ui) {
     ui.add_space(12.0);
 
     egui::Frame::group(ui.style())
-        .inner_margin(egui::Margin::same(16.0))
+        .inner_margin(egui::Margin::same(16))
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
 

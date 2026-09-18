@@ -235,12 +235,12 @@ fn draw_titlebar(ctx: &egui::Context) {
         .frame(
             egui::Frame::default()
                 .fill(titlebar_bg)
-                .inner_margin(egui::Margin::same(0.0))
-                .rounding(egui::Rounding {
-                    nw: 8.0,
-                    ne: 8.0,
-                    sw: 0.0,
-                    se: 0.0,
+                .inner_margin(egui::Margin::same(0))
+                .corner_radius(egui::CornerRadius {
+                    nw: 8,
+                    ne: 8,
+                    sw: 0,
+                    se: 0,
                 }),
         )
         .show(ctx, |ui| {

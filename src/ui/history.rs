@@ -69,12 +69,12 @@ pub fn draw_history(ctx: &egui::Context) {
                         // 数据行
                         for (row_i, entry) in history.iter().enumerate() {
                             let frame = if row_i % 2 == 1 {
-                                egui::Frame::none()
-                                    .inner_margin(egui::Margin::symmetric(4.0, 2.0))
+                                egui::Frame::NONE
+                                    .inner_margin(egui::Margin::symmetric(4, 2))
                                     .fill(crate::theme::history_row_alt())
                             } else {
-                                egui::Frame::none()
-                                    .inner_margin(egui::Margin::symmetric(4.0, 2.0))
+                                egui::Frame::NONE
+                                    .inner_margin(egui::Margin::symmetric(4, 2))
                             };
 
                             let row = frame.show(ui, |ui| {

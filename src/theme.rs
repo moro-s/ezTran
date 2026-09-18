@@ -41,7 +41,7 @@ pub fn setup_fonts(ctx: &egui::Context) {
             }
             fonts
                 .font_data
-                .insert("chinese".to_owned(), egui::FontData::from_owned(data));
+                .insert("chinese".to_owned(), std::sync::Arc::new(egui::FontData::from_owned(data)));
             fonts
                 .families
                 .entry(egui::FontFamily::Proportional)
@@ -63,7 +63,7 @@ pub fn setup_fonts(ctx: &egui::Context) {
                 if is_valid_font(&data) {
                     fonts.font_data.insert(
                         "user_font".to_owned(),
-                        egui::FontData::from_owned(data),
+                        std::sync::Arc::new(egui::FontData::from_owned(data)),
                     );
                     // 将用户字体放到列表最前面，优先使用
                     fonts
@@ -96,7 +96,7 @@ pub fn setup_fonts(ctx: &egui::Context) {
             }
             fonts
                 .font_data
-                .insert("symbols".to_owned(), egui::FontData::from_owned(data));
+                .insert("symbols".to_owned(), std::sync::Arc::new(egui::FontData::from_owned(data)));
             fonts
                 .families
                 .entry(egui::FontFamily::Proportional)
@@ -277,7 +277,7 @@ pub fn setup_style(ctx: &egui::Context) {
     let mut style = (*ctx.style()).clone();
     style.spacing.item_spacing = egui::vec2(6.0, 6.0);
     style.spacing.button_padding = egui::vec2(10.0, 4.0);
-    style.spacing.window_margin = egui::Margin::same(0.0);
+    style.spacing.window_margin = egui::Margin::same(0);
     // 统一所有交互控件高度
     style.spacing.interact_size.y = 26.0;
     // 统一 TextEdit 内边距
@@ -322,14 +322,14 @@ pub fn setup_style(ctx: &egui::Context) {
     vis.hyperlink_color = egui::Color32::from_rgb(137, 180, 250);
 
     // 所有控件统一圆角
-    let rounding = egui::Rounding::same(6.0);
-    vis.widgets.noninteractive.rounding = rounding;
-    vis.widgets.inactive.rounding = rounding;
-    vis.widgets.hovered.rounding = rounding;
-    vis.widgets.active.rounding = rounding;
-    vis.widgets.open.rounding = rounding;
-    vis.window_rounding = egui::Rounding::same(8.0);
-    vis.menu_rounding = rounding;
+    let rounding = egui::CornerRadius::same(6);
+    vis.widgets.noninteractive.corner_radius = rounding;
+    vis.widgets.inactive.corner_radius = rounding;
+    vis.widgets.hovered.corner_radius = rounding;
+    vis.widgets.active.corner_radius = rounding;
+    vis.widgets.open.corner_radius = rounding;
+    vis.window_corner_radius = egui::CornerRadius::same(8);
+    vis.menu_corner_radius = rounding;
 
     ctx.set_visuals(vis);
 }
