@@ -9,6 +9,15 @@ pub fn draw_translate(ctx: &egui::Context) {
     // toast 自动消失（3 秒）
     update_toast(ctx);
 
+    // 翻译工作台 hover/active 控件圆角设为 0（不影响其他页面）
+    ctx.style_mut(|style| {
+        let zero = egui::Rounding::ZERO;
+        style.visuals.widgets.hovered.rounding = zero;
+        style.visuals.widgets.active.rounding = zero;
+        style.visuals.widgets.inactive.rounding = zero;
+        style.visuals.widgets.open.rounding = zero;
+    });
+
     // Esc 键隐藏到托盘
     if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
         crate::window::hide_main();
@@ -36,7 +45,6 @@ pub fn draw_translate(ctx: &egui::Context) {
     let panel_bg = crate::theme::panel_bg();
     let panel_frame = egui::Frame::default()
         .fill(panel_bg)
-        .rounding(8.0)
         .inner_margin(egui::Margin::same(10.0));
 
     // ── 顶部工具栏 ──

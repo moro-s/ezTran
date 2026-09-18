@@ -11,12 +11,17 @@ pub fn draw_history(ctx: &egui::Context) {
     let mut clicked_entry: Option<(String, String, String)> = None;
     let mut clear_all = false;
 
+    // 历史弹窗大小跟随主窗口：取主窗口 80% 宽高，但有最小/最大限制
+    let screen = ctx.screen_rect();
+    let win_w = (screen.width() * 0.8).clamp(420.0, 900.0);
+    let win_h = (screen.height() * 0.8).clamp(300.0, 700.0);
+
     egui::Window::new("翻译历史")
         .id(egui::Id::new("history_window"))
         .open(&mut open)
         .resizable(false)
         .collapsible(false)
-        .fixed_size([660.0, 440.0])
+        .fixed_size([win_w, win_h])
         .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
         .show(ctx, |ui| {
             let count = crate::history::get_all().len();
