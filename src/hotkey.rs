@@ -517,7 +517,7 @@ pub fn simulate_copy_and_get_clipboard() -> Option<String> {
 /// 点击后捕获按键，显示当前快捷键
 pub fn hotkey_input(ui: &mut egui::Ui, _id: &str, value: &mut String) {
     let (rect, resp) = ui.allocate_exact_size(
-        egui::vec2(160.0, ui.spacing().interact_size.y),
+        egui::vec2(220.0, ui.spacing().interact_size.y),
         egui::Sense::click(),
     );
 
@@ -537,10 +537,10 @@ pub fn hotkey_input(ui: &mut egui::Ui, _id: &str, value: &mut String) {
 
     let bg = crate::theme::hotkey_input_bg(resp.has_focus(), resp.hovered());
 
-    ui.painter().rect_filled(rect, 4.0, bg);
+    ui.painter().rect_filled(rect, 6.0, bg);
     // 焦点状态加边框提示
     if resp.has_focus() {
-        ui.painter().rect_stroke(rect, 4.0, egui::Stroke::new(2.0, crate::theme::text_translated()));
+        ui.painter().rect_stroke(rect, 6.0, egui::Stroke::new(2.0, crate::theme::text_translated()));
     }
     ui.painter().text(
         rect.center(),

@@ -1,6 +1,6 @@
 use crate::config::{AppConfig, LANGUAGES};
+use crate::ui::components::{form_row, render_toast, show_toast, update_toast};
 use crate::ui::state::{SettingsTab, STATE};
-use crate::ui::translate::{render_toast, show_toast, update_toast};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 /// 标记设置窗口需要居中（打开时设置，视口首次渲染时消费）
@@ -308,7 +308,7 @@ fn settings_engines(ui: &mut egui::Ui) {
                     form_row(ui, "名称", |ui| {
                         let mut name_buf = name;
                         ui.add(
-                            egui::TextEdit::singleline(&mut name_buf).desired_width(200.0),
+                            egui::TextEdit::singleline(&mut name_buf).desired_width(220.0),
                         );
                         STATE.lock().unwrap().config_edit.engines.engines[i].name = name_buf;
                     });
@@ -488,18 +488,4 @@ fn lang_combo_settings(ui: &mut egui::Ui, id: &str, include_auto: bool) {
                 }
             }
         });
-}
-
-/// 表单行：左侧固定宽度 label，右侧填充输入控件，实现对齐
-fn form_row(ui: &mut egui::Ui, label_text: &str, add_content: impl FnOnce(&mut egui::Ui)) {
-    const LABEL_WIDTH: f32 = 90.0;
-    ui.horizontal(|ui| {
-        let label_resp = ui.add(
-            egui::Label::new(egui::RichText::new(label_text).strong())
-                .wrap(),
-        );
-        let pad = (LABEL_WIDTH - label_resp.rect.width()).max(0.0);
-        ui.add_space(pad);
-        add_content(ui);
-    });
 }

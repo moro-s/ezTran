@@ -2,6 +2,7 @@ use crate::config::AppConfig;
 use crate::icon;
 use crate::theme;
 use crate::ui;
+use crate::ui::components::{anim_towards, hover_anim_alpha, lerp_color};
 use crate::window;
 use crate::hotkey;
 use tray_icon::menu::{Menu, MenuEvent, MenuId, MenuItem, PredefinedMenuItem};
@@ -273,23 +274,17 @@ fn draw_titlebar(ctx: &egui::Context) {
                 }
 
                 // ── 右侧按钮 ──
-                // 置顶
+                // 置顶（钉住状态高亮背景，未钉住透明）
                 let pinned = window::is_pinned();
-                let pin_resp = titlebar_button(ui, "\u{1F4CC}", theme::titlebar_btn_hover());
-                if pinned {
-                    ui.painter().rect_filled(
-                        pin_resp.rect,
-                        0.0,
-                        theme::pin_overlay(),
-                    );
-                    ui.painter().text(
-                        pin_resp.rect.center(),
-                        egui::Align2::CENTER_CENTER,
-                        "\u{1F4CC}",
-                        egui::FontId::proportional(14.0),
-                        theme::titlebar_text(),
-                    );
-                }
+                let pin_resp = ui.allocate_response(egui::vec2(46.0, 34.0), egui::Sense::click());
+                draw_titlebar_btn_anim(
+                    ui,
+                    &pin_resp,
+                    pinned,
+                    egui::Color32::from_rgb(70, 120, 200),
+                    "\u{1F4CC}",
+                    if pinned { egui::Color32::WHITE } else { theme::titlebar_text() },
+                );
                 if pin_resp.clicked() {
                     let new_pinned = window::toggle_pin();
                     let level = if new_pinned {
@@ -315,8 +310,7 @@ fn draw_titlebar(ctx: &egui::Context) {
                 }
 
                 // 关闭
-                let close_resp =
-                    titlebar_button(ui, "\u{2715}", egui::Color32::from_rgb(232, 17, 35));
+                let close_resp = titlebar_button_red(ui, "\u{2715}");
                 if close_resp.clicked() {
                     window::hide_main();
                 }
@@ -324,15 +318,22 @@ fn draw_titlebar(ctx: &egui::Context) {
         });
 }
 
-/// 标题栏按钮（透明背景，hover 时变色）
+/// 标题栏按钮（透明背景，hover 时平滑过渡到指定颜色）
 fn titlebar_button(
     ui: &mut egui::Ui,
     icon: &str,
     hover_color: egui::Color32,
 ) -> egui::Response {
     let resp = ui.allocate_response(egui::vec2(46.0, 34.0), egui::Sense::click());
-    if resp.hovered() {
-        ui.painter().rect_filled(resp.rect, 0.0, hover_color);
+    let alpha = hover_anim_alpha(ui, &resp);
+    if alpha > 0.01 {
+        let c = hover_color;
+        let a = (alpha * c.a() as f32) as u8;
+        ui.painter().rect_filled(
+            resp.rect,
+            6.0,
+            egui::Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), a),
+        );
     }
     ui.painter().text(
         resp.rect.center(),
@@ -344,108 +345,159 @@ fn titlebar_button(
     resp
 }
 
-/// 绘制无边框窗口的透明缩放边框。
-/// 在窗口四边和四角放置透明交互区，拖拽时通过 WM_NCLBUTTONDOWN 让系统接管缩放。
+/// 关闭按钮（hover 时平滑过渡到红色背景，图标渐变为白色）
+fn titlebar_button_red(ui: &mut egui::Ui, icon: &str) -> egui::Response {
+    let resp = ui.allocate_response(egui::vec2(46.0, 34.0), egui::Sense::click());
+    let alpha = hover_anim_alpha(ui, &resp);
+    if alpha > 0.01 {
+        let a = (alpha * 255.0) as u8;
+        ui.painter().rect_filled(
+            resp.rect,
+            6.0,
+            egui::Color32::from_rgba_unmultiplied(232, 17, 35, a),
+        );
+    }
+    let base = theme::titlebar_text();
+    let icon_color = lerp_color(base, egui::Color32::WHITE, alpha);
+    ui.painter().text(
+        resp.rect.center(),
+        egui::Align2::CENTER_CENTER,
+        icon,
+        egui::FontId::proportional(14.0),
+        icon_color,
+    );
+    resp
+}
+
+/// 钉住/激活态按钮的动画绘制
+fn draw_titlebar_btn_anim(
+    ui: &mut egui::Ui,
+    resp: &egui::Response,
+    active: bool,
+    active_color: egui::Color32,
+    icon: &str,
+    icon_color: egui::Color32,
+) {
+    let target = if active { 1.0 } else { 0.0 };
+    let alpha = anim_towards(ui, resp.id.with("pin_anim"), target, 0.15);
+
+    if alpha > 0.01 {
+        let hover_boost = if resp.hovered() { 30.0 } else { 0.0 };
+        let c = active_color;
+        let a = ((alpha * 255.0) + hover_boost).min(255.0) as u8;
+        ui.painter().rect_filled(
+            resp.rect,
+            6.0,
+            egui::Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), a),
+        );
+    } else if resp.hovered() {
+        let c = theme::titlebar_btn_hover();
+        ui.painter().rect_filled(resp.rect, 6.0, c);
+    }
+
+    ui.painter().text(
+        resp.rect.center(),
+        egui::Align2::CENTER_CENTER,
+        icon,
+        egui::FontId::proportional(14.0),
+        icon_color,
+    );
+}
+
+/// 绘制无边框窗口的角落缩放手柄。
+/// 仅在窗口四个角放置小交互区，hover 时在该角对应的两条边框上绘制蓝色高亮，
+/// 拖拽时通过 WM_NCLBUTTONDOWN 让系统接管。
 fn draw_resize_borders(ctx: &egui::Context) {
     use crate::window;
-    use egui::Sense;
 
     let screen = ctx.screen_rect();
-    let b = 6.0; // 边框宽度（像素）
-    let c = 12.0; // 角落尺寸（像素）
+    let corner_size = 16.0;
 
-    // 最大化时不显示缩放边框
+    // 最大化时不显示缩放手柄
     if ctx.input(|i| i.viewport().maximized.unwrap_or(false)) {
         return;
     }
 
-    egui::Area::new(egui::Id::new("resize_borders"))
-        .order(egui::Order::Foreground)
-        .fixed_pos(screen.min)
-        .interactable(true)
-        .show(ctx, |ui| {
-            ui.set_min_size(screen.size());
-            // ── 四条边 ──
-            // 左边
-            let r = ui.allocate_rect(
-                egui::Rect::from_min_size(screen.min, egui::vec2(b, screen.height())),
-                Sense::drag(),
-            );
-            if r.drag_started() {
-                window::start_resize(window::HTLEFT);
-            }
-            // 右边
-            let r = ui.allocate_rect(
-                egui::Rect::from_min_size(
-                    egui::pos2(screen.right() - b, screen.top()),
-                    egui::vec2(b, screen.height()),
-                ),
-                Sense::drag(),
-            );
-            if r.drag_started() {
-                window::start_resize(window::HTRIGHT);
-            }
-            // 上边
-            let r = ui.allocate_rect(
-                egui::Rect::from_min_size(screen.min, egui::vec2(screen.width(), b)),
-                Sense::drag(),
-            );
-            if r.drag_started() {
-                window::start_resize(window::HTTOP);
-            }
-            // 下边
-            let r = ui.allocate_rect(
-                egui::Rect::from_min_size(
-                    egui::pos2(screen.left(), screen.bottom() - b),
-                    egui::vec2(screen.width(), b),
-                ),
-                Sense::drag(),
-            );
-            if r.drag_started() {
-                window::start_resize(window::HTBOTTOM);
-            }
+    // 鼠标位置（屏幕坐标）
+    let mouse_pos = ctx.input(|i| i.pointer.hover_pos());
 
-            // ── 四个角 ──
-            // 左上
-            let r = ui.allocate_rect(
-                egui::Rect::from_min_size(screen.min, egui::vec2(c, c)),
-                Sense::drag(),
-            );
-            if r.drag_started() {
-                window::start_resize(window::HTTOPLEFT);
+    // 四个角：交互矩形、命中代码、该角对应的两条边线段（全局坐标）
+    let corners = [
+        // 右下角
+        (
+            egui::Rect::from_min_size(
+                egui::pos2(screen.right() - corner_size, screen.bottom() - corner_size),
+                egui::vec2(corner_size, corner_size),
+            ),
+            window::HTBOTTOMRIGHT,
+            [
+                (egui::pos2(screen.right() - corner_size, screen.bottom()),
+                 egui::pos2(screen.right(), screen.bottom())),
+                (egui::pos2(screen.right(), screen.bottom() - corner_size),
+                 egui::pos2(screen.right(), screen.bottom())),
+            ],
+        ),
+        // 左下角
+        (
+            egui::Rect::from_min_size(
+                egui::pos2(screen.left(), screen.bottom() - corner_size),
+                egui::vec2(corner_size, corner_size),
+            ),
+            window::HTBOTTOMLEFT,
+            [
+                (egui::pos2(screen.left(), screen.bottom() - corner_size),
+                 egui::pos2(screen.left(), screen.bottom())),
+                (egui::pos2(screen.left(), screen.bottom()),
+                 egui::pos2(screen.left() + corner_size, screen.bottom())),
+            ],
+        ),
+        // 右上角
+        (
+            egui::Rect::from_min_size(
+                egui::pos2(screen.right() - corner_size, screen.top()),
+                egui::vec2(corner_size, corner_size),
+            ),
+            window::HTTOPRIGHT,
+            [
+                (egui::pos2(screen.right() - corner_size, screen.top()),
+                 egui::pos2(screen.right(), screen.top())),
+                (egui::pos2(screen.right(), screen.top()),
+                 egui::pos2(screen.right(), screen.top() + corner_size)),
+            ],
+        ),
+        // 左上角
+        (
+            egui::Rect::from_min_size(screen.min, egui::vec2(corner_size, corner_size)),
+            window::HTTOPLEFT,
+            [
+                (egui::pos2(screen.left(), screen.top()),
+                 egui::pos2(screen.left() + corner_size, screen.top())),
+                (egui::pos2(screen.left(), screen.top()),
+                 egui::pos2(screen.left(), screen.top() + corner_size)),
+            ],
+        ),
+    ];
+
+    let painter = ctx.layer_painter(egui::LayerId::new(
+        egui::Order::Foreground,
+        egui::Id::new("resize_corners"),
+    ));
+
+    for (rect, hit_code, edges) in &corners {
+        let hovered = mouse_pos.map(|m| rect.contains(m)).unwrap_or(false);
+
+        // hover 时绘制蓝色边框高亮
+        if hovered {
+            let highlight = egui::Color32::from_rgb(100, 160, 255);
+            let stroke = egui::Stroke::new(2.0, highlight);
+            for (start, end) in edges {
+                painter.line_segment([*start, *end], stroke);
             }
-            // 右上
-            let r = ui.allocate_rect(
-                egui::Rect::from_min_size(
-                    egui::pos2(screen.right() - c, screen.top()),
-                    egui::vec2(c, c),
-                ),
-                Sense::drag(),
-            );
-            if r.drag_started() {
-                window::start_resize(window::HTTOPRIGHT);
-            }
-            // 左下
-            let r = ui.allocate_rect(
-                egui::Rect::from_min_size(
-                    egui::pos2(screen.left(), screen.bottom() - c),
-                    egui::vec2(c, c),
-                ),
-                Sense::drag(),
-            );
-            if r.drag_started() {
-                window::start_resize(window::HTBOTTOMLEFT);
-            }
-            // 右下
-            let r = ui.allocate_rect(
-                egui::Rect::from_min_size(
-                    egui::pos2(screen.right() - c, screen.bottom() - c),
-                    egui::vec2(c, c),
-                ),
-                Sense::drag(),
-            );
-            if r.drag_started() {
-                window::start_resize(window::HTBOTTOMRIGHT);
-            }
-        });
+        }
+
+        // 交互检测：鼠标在角内 + 按下 → 开始缩放
+        if hovered && ctx.input(|i| i.pointer.primary_pressed()) {
+            window::start_resize(*hit_code);
+        }
+    }
 }

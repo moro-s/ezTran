@@ -278,6 +278,10 @@ pub fn setup_style(ctx: &egui::Context) {
     style.spacing.item_spacing = egui::vec2(6.0, 6.0);
     style.spacing.button_padding = egui::vec2(10.0, 4.0);
     style.spacing.window_margin = egui::Margin::same(0.0);
+    // 统一所有交互控件高度
+    style.spacing.interact_size.y = 26.0;
+    // 统一 TextEdit 内边距
+    style.spacing.text_edit_width = 220.0;
 
     // 根据字号配置设置 text_styles
     use egui::{FontFamily, FontId, TextStyle};
@@ -316,6 +320,17 @@ pub fn setup_style(ctx: &egui::Context) {
     }
 
     vis.hyperlink_color = egui::Color32::from_rgb(137, 180, 250);
+
+    // 所有控件统一圆角
+    let rounding = egui::Rounding::same(6.0);
+    vis.widgets.noninteractive.rounding = rounding;
+    vis.widgets.inactive.rounding = rounding;
+    vis.widgets.hovered.rounding = rounding;
+    vis.widgets.active.rounding = rounding;
+    vis.widgets.open.rounding = rounding;
+    vis.window_rounding = egui::Rounding::same(8.0);
+    vis.menu_rounding = rounding;
+
     ctx.set_visuals(vis);
 }
 
