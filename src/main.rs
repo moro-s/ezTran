@@ -1,6 +1,5 @@
 mod app;
 mod config;
-mod font_list;
 mod history;
 mod hotkey;
 mod icon;

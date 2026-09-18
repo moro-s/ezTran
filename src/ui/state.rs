@@ -2,17 +2,12 @@ use crate::config::AppConfig;
 use crate::translate::TranslateResult;
 
 /// 设置页面标签
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub enum SettingsTab {
+    #[default]
     General,
     Engines,
     About,
-}
-
-impl Default for SettingsTab {
-    fn default() -> Self {
-        SettingsTab::General
-    }
 }
 
 /// 应用状态

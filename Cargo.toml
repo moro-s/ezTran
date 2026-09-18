@@ -1,6 +1,6 @@
 [package]
 name = "eztran"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 description = "A lightweight desktop translation tool built with egui"
 
@@ -9,7 +9,7 @@ name = "eztran"
 path = "src/main.rs"
 
 [dependencies]
-eframe = { version = "0.36", default-features = false, features = ["default_fonts", "glow", "accesskit", "links", "wayland", "x11"] }
+eframe = { version = "0.36", default-features = false, features = ["default_fonts", "glow"] }
 egui = "0.36"
 minreq = { version = "2", features = ["https-rustls", "json-using-serde"] }
 serde = { version = "1", features = ["derive"] }

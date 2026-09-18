@@ -1,10 +1,11 @@
 use serde::{Deserialize, Serialize};
 
 /// 支持的翻译引擎类型
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum EngineKind {
     /// 有道翻译
+    #[default]
     Youdao,
     /// 百度翻译
     Baidu,
@@ -12,12 +13,6 @@ pub enum EngineKind {
     DeepL,
     /// 自定义 API（兼容 OpenAI 格式等）
     Custom,
-}
-
-impl Default for EngineKind {
-    fn default() -> Self {
-        EngineKind::Youdao
-    }
 }
 
 impl EngineKind {

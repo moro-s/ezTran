@@ -10,15 +10,6 @@ pub fn draw_translate(ui: &mut egui::Ui) {
     // toast 自动消失（3 秒）
     update_toast(&ctx);
 
-    // 翻译工作台 hover/active 控件圆角设为 0（不影响其他页面）
-    ctx.style_mut_of(ctx.theme(), |style| {
-        let zero = egui::CornerRadius::ZERO;
-        style.visuals.widgets.hovered.corner_radius = zero;
-        style.visuals.widgets.active.corner_radius = zero;
-        style.visuals.widgets.inactive.corner_radius = zero;
-        style.visuals.widgets.open.corner_radius = zero;
-    });
-
     // Esc 键隐藏到托盘
     if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
         crate::window::hide_main();

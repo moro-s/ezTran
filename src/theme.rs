@@ -1,21 +1,10 @@
-/// 加载字体并注入 egui（根据配置动态切换，不再用 Once 锁死）
+/// 加载字体并注入 egui（仅初始化一次）
 pub fn setup_fonts(ctx: &egui::Context) {
-    use std::sync::atomic::{AtomicU64, Ordering};
-    static LAST_FONT_HASH: AtomicU64 = AtomicU64::new(0);
-
-    let font_family = crate::ui::state::STATE
-        .lock()
-        .unwrap()
-        .config_edit
-        .font_family
-        .clone();
-
-    // 用字体名做 hash，未变化则跳过
-    let hash = font_family_hash(&font_family);
-    if LAST_FONT_HASH.load(Ordering::SeqCst) == hash {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static DONE: AtomicBool = AtomicBool::new(false);
+    if DONE.swap(true, Ordering::SeqCst) {
         return;
     }
-    LAST_FONT_HASH.store(hash, Ordering::SeqCst);
 
     let mut fonts = egui::FontDefinitions::default();
 
@@ -56,34 +45,6 @@ pub fn setup_fonts(ctx: &egui::Context) {
         }
     }
 
-    // 加载用户选择的自定义字体
-    if !font_family.is_empty() {
-        if let Some(path) = find_font_file(&font_family) {
-            if let Ok(data) = std::fs::read(&path) {
-                if is_valid_font(&data) {
-                    fonts.font_data.insert(
-                        "user_font".to_owned(),
-                        std::sync::Arc::new(egui::FontData::from_owned(data)),
-                    );
-                    // 将用户字体放到列表最前面，优先使用
-                    fonts
-                        .families
-                        .entry(egui::FontFamily::Proportional)
-                        .or_default()
-                        .insert(0, "user_font".to_owned());
-                    fonts
-                        .families
-                        .entry(egui::FontFamily::Monospace)
-                        .or_default()
-                        .insert(0, "user_font".to_owned());
-                    log::info!("[theme] 已加载用户字体: {} -> {}", font_family, path);
-                }
-            }
-        } else {
-            log::warn!("[theme] 未找到字体文件: {}", font_family);
-        }
-    }
-
     // 加载系统符号字体，用于显示箭头等 Unicode 符号（如 ⇄）
     let symbol_candidates: &[&str] = &[
         "C:\\Windows\\Fonts\\seguisym.ttf",
@@ -112,124 +73,6 @@ pub fn setup_fonts(ctx: &egui::Context) {
     }
 
     ctx.set_fonts(fonts);
-}
-
-/// 简单 hash 字体名用于变更检测
-fn font_family_hash(name: &str) -> u64 {
-    use std::hash::{Hash, Hasher};
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
-    name.hash(&mut hasher);
-    hasher.finish()
-}
-
-/// 通过 Windows 注册表查找字体文件路径
-#[cfg(windows)]
-fn find_font_file(font_name: &str) -> Option<String> {
-    use std::ffi::c_void;
-    use std::os::windows::ffi::OsStrExt;
-
-    extern "system" {
-        fn RegOpenKeyExW(
-            hkey: *mut c_void,
-            subkey: *const u16,
-            options: u32,
-            access: u32,
-            result: *mut *mut c_void,
-        ) -> i32;
-        fn RegCloseKey(hkey: *mut c_void) -> i32;
-        fn RegEnumValueW(
-            hkey: *mut c_void,
-            index: u32,
-            value_name: *mut u16,
-            value_name_len: *mut u32,
-            reserved: *mut u32,
-            value_type: *mut u32,
-            data: *mut u8,
-            data_len: *mut u32,
-        ) -> i32;
-    }
-
-    const HKEY_LOCAL_MACHINE: usize = 0x80000002;
-    const KEY_READ: u32 = 0x20019;
-    const SUBKEY: &str = "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Fonts";
-    let subkey_wide: Vec<u16> = std::ffi::OsStr::new(SUBKEY)
-        .encode_wide()
-        .chain(std::iter::once(0))
-        .collect();
-
-    let mut hkey: *mut c_void = std::ptr::null_mut();
-    let status = unsafe {
-        RegOpenKeyExW(
-            HKEY_LOCAL_MACHINE as *mut c_void,
-            subkey_wide.as_ptr(),
-            0,
-            KEY_READ,
-            &mut hkey,
-        )
-    };
-    if status != 0 {
-        return None;
-    }
-
-    let target_lower = font_name.to_lowercase();
-    let mut index = 0u32;
-    let mut result = None;
-
-    loop {
-        let mut name_buf = [0u16; 256];
-        let mut name_len = name_buf.len() as u32;
-        let mut data_buf = [0u8; 1024];
-        let mut data_len = data_buf.len() as u32;
-        let mut data_type = 0u32;
-
-        let status = unsafe {
-            RegEnumValueW(
-                hkey,
-                index,
-                name_buf.as_mut_ptr(),
-                &mut name_len,
-                std::ptr::null_mut(),
-                &mut data_type,
-                data_buf.as_mut_ptr(),
-                &mut data_len,
-            )
-        };
-
-        if status != 0 {
-            break;
-        }
-
-        // 读取值名（UTF-16）
-        let name_str = String::from_utf16_lossy(&name_buf[..name_len as usize]);
-        // 值名格式: "微软雅黑 (TrueType)" -> 匹配字体名
-        if name_str.to_lowercase().starts_with(&target_lower) {
-            // 数据是 UTF-16LE 字符串（REG_SZ）
-            let data_chars: Vec<u16> = data_buf[..data_len as usize]
-                .chunks_exact(2)
-                .map(|chunk| u16::from_le_bytes([chunk[0], chunk[1]]))
-                .collect();
-            let data_str = String::from_utf16_lossy(&data_chars);
-            let file_name = data_str.trim_end_matches('\0').to_string();
-
-            let path = if std::path::Path::new(&file_name).is_absolute() {
-                file_name
-            } else {
-                format!("C:\\Windows\\Fonts\\{}", file_name)
-            };
-            result = Some(path);
-            break;
-        }
-
-        index += 1;
-    }
-
-    unsafe { RegCloseKey(hkey) };
-    result
-}
-
-#[cfg(not(windows))]
-fn find_font_file(_font_name: &str) -> Option<String> {
-    None
 }
 
 fn is_valid_font(data: &[u8]) -> bool {

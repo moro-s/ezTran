@@ -62,7 +62,7 @@ pub fn hover_anim_alpha(ui: &mut egui::Ui, resp: &egui::Response) -> f32 {
 
 /// 持久化动画值，每帧向 target 逼近（帧率无关）
 pub fn anim_towards(ui: &mut egui::Ui, id: egui::Id, target: f32, speed: f32) -> f32 {
-    let dt = ui.input(|i| i.unstable_dt).min(0.1) as f32;
+    let dt = ui.input(|i| i.unstable_dt).min(0.1);
     let current = ui.memory(|m| m.data.get_temp::<f32>(id).unwrap_or(0.0));
     let new = current + (target - current) * (1.0 - (1.0 - speed).powf(dt * 60.0));
     ui.memory_mut(|m| m.data.insert_temp(id, new));

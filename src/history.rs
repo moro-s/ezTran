@@ -28,7 +28,7 @@ const MAX_HISTORY: usize = 50;
 
 /// 历史文件路径（与 config.json 同目录）
 fn history_path() -> Option<std::path::PathBuf> {
-    let dir = dirs::config_dir().or_else(|| dirs::home_dir())?;
+    let dir = dirs::config_dir().or_else(dirs::home_dir)?;
     let app_dir = dir.join("eztran");
     let _ = std::fs::create_dir_all(&app_dir);
     Some(app_dir.join("history.json"))

@@ -173,35 +173,6 @@ fn settings_general(ui: &mut egui::Ui) {
     }
     ui.add_space(10.0);
 
-    // 应用字体
-    ui.label(egui::RichText::new("应用字体").strong());
-    ui.add_space(2.0);
-    {
-        let font = STATE.lock().unwrap().config_edit.font_family.clone();
-        let mut font = font;
-        let fonts = crate::font_list::get_system_fonts();
-        let selected_text = if font.is_empty() {
-            "系统默认".to_string()
-        } else {
-            font.clone()
-        };
-        egui::ComboBox::from_id_salt("font_combo")
-            .selected_text(selected_text)
-            .width(220.0)
-            .show_ui(ui, |ui| {
-                if ui.selectable_label(font.is_empty(), "系统默认").clicked() {
-                    font.clear();
-                }
-                for f in fonts {
-                    if ui.selectable_label(*f == font, f).clicked() {
-                        font = f.clone();
-                    }
-                }
-            });
-        STATE.lock().unwrap().config_edit.font_family = font;
-    }
-    ui.add_space(10.0);
-
     // 应用字号
     ui.label(egui::RichText::new("应用字号").strong());
     ui.add_space(2.0);

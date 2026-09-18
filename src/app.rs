@@ -221,7 +221,9 @@ fn get_icon_texture(ctx: &egui::Context) -> egui::TextureHandle {
             size: [w as usize, h as usize],
             source_size: egui::Vec2::new(w as f32, h as f32),
             pixels: rgba
-                .chunks_exact(4)
+                .as_chunks::<4>()
+                .0
+                .iter()
                 .map(|c| egui::Color32::from_rgba_unmultiplied(c[0], c[1], c[2], c[3]))
                 .collect(),
         },

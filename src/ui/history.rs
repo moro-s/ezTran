@@ -43,18 +43,6 @@ pub fn draw_history(ctx: &egui::Context) {
                 let mut clicked_entry: Option<(String, String, String)> = None;
                 let mut clear_all = false;
 
-                let count = crate::history::get_all().len();
-
-                // 顶栏：记录数
-                ui.horizontal(|ui| {
-                    ui.label(
-                        egui::RichText::new(format!("共 {} 条记录（最多 50 条）", count))
-                            .small()
-                            .color(crate::theme::history_meta()),
-                    );
-                });
-                ui.separator();
-
                 let history = crate::history::get_all();
                 if history.is_empty() {
                     ui.add_space(40.0);

@@ -3,17 +3,12 @@ use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 /// 应用主题
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub enum AppTheme {
+    #[default]
     Dark,
     Light,
     System,
-}
-
-impl Default for AppTheme {
-    fn default() -> Self {
-        AppTheme::Dark
-    }
 }
 
 impl AppTheme {
@@ -31,17 +26,12 @@ impl AppTheme {
 }
 
 /// 应用字号
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 pub enum FontSize {
     Small,
+    #[default]
     Standard,
     Large,
-}
-
-impl Default for FontSize {
-    fn default() -> Self {
-        FontSize::Standard
-    }
 }
 
 impl FontSize {
@@ -81,8 +71,6 @@ pub struct AppConfig {
     pub input_hotkey: String,
     /// 应用主题
     pub theme: AppTheme,
-    /// 应用字体名称（留空使用系统默认）
-    pub font_family: String,
     /// 应用字号
     pub font_size: FontSize,
     /// 是否启用输入翻译
@@ -102,7 +90,6 @@ impl Default for AppConfig {
             selection_hotkey: "Ctrl+Shift+T".into(),
             input_hotkey: "Ctrl+Shift+I".into(),
             theme: AppTheme::default(),
-            font_family: String::new(),
             font_size: FontSize::default(),
             enable_input_translate: true,
             enable_selection_translate: true,
@@ -115,7 +102,7 @@ impl AppConfig {
     /// 配置文件路径
     fn config_path() -> anyhow::Result<PathBuf> {
         let dir = dirs::config_dir()
-            .or_else(|| dirs::home_dir())
+            .or_else(dirs::home_dir)
             .ok_or_else(|| anyhow::anyhow!("无法获取配置目录"))?;
         let app_dir = dir.join("eztran");
         std::fs::create_dir_all(&app_dir)?;

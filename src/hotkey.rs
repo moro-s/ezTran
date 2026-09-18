@@ -118,6 +118,7 @@ impl HotKey {
 // ── Windows 全局热键 ──
 
 #[cfg(windows)]
+#[allow(clippy::upper_case_acronyms)]
 mod win {
     pub const WM_HOTKEY: u32 = 0x0312;
     pub const WM_QUIT: u32 = 0x0012;
@@ -569,7 +570,7 @@ pub fn hotkey_input(ui: &mut egui::Ui, _id: &str, value: &mut String) {
 
         // 检测是否有非修饰键按下
         let key_pressed = ui.input(|i| {
-            for key in [
+            [
                 egui::Key::A, egui::Key::B, egui::Key::C, egui::Key::D, egui::Key::E,
                 egui::Key::F, egui::Key::G, egui::Key::H, egui::Key::I, egui::Key::J,
                 egui::Key::K, egui::Key::L, egui::Key::M, egui::Key::N, egui::Key::O,
@@ -582,12 +583,7 @@ pub fn hotkey_input(ui: &mut egui::Ui, _id: &str, value: &mut String) {
                 egui::Key::F6, egui::Key::F7, egui::Key::F8, egui::Key::F9,
                 egui::Key::F10, egui::Key::F11, egui::Key::F12, egui::Key::Enter,
                 egui::Key::Space, egui::Key::Tab,
-            ] {
-                if i.key_pressed(key) {
-                    return Some(key);
-                }
-            }
-            None
+            ].into_iter().find(|&key| i.key_pressed(key))
         });
 
         if let Some(key) = key_pressed {
