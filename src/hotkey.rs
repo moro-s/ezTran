@@ -540,7 +540,7 @@ pub fn hotkey_input(ui: &mut egui::Ui, _id: &str, value: &mut String) {
     ui.painter().rect_filled(rect, 6.0, bg);
     // 焦点状态加边框提示
     if resp.has_focus() {
-        ui.painter().rect_stroke(rect, 6.0, egui::Stroke::new(2.0, crate::theme::text_translated()));
+        ui.painter().rect_stroke(rect, 6.0, egui::Stroke::new(2.0_f32, crate::theme::text_translated()));
     }
     ui.painter().text(
         rect.center(),

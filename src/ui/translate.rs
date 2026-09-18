@@ -14,6 +14,24 @@ pub fn draw_translate(ctx: &egui::Context) {
         crate::window::hide_main();
     }
 
+    // Ctrl+Enter 触发翻译（消费事件，防止 multiline 插入换行）
+    if ctx.input(|i| i.key_pressed(egui::Key::Enter) && i.modifiers.ctrl) {
+        ctx.input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::Enter));
+        let translating = STATE.lock().unwrap().translating;
+        if !translating {
+            let (text, from, to, engine_idx) = {
+                let s = STATE.lock().unwrap();
+                (
+                    s.input_text.clone(),
+                    s.from_lang.clone(),
+                    s.to_lang.clone(),
+                    s.engine_index,
+                )
+            };
+            do_translate(&text, &from, &to, engine_idx, ctx);
+        }
+    }
+
     // 面板背景色 #1E1E1E
     let panel_bg = crate::theme::panel_bg();
     let panel_frame = egui::Frame::default()
@@ -131,7 +149,6 @@ pub fn draw_translate(ctx: &egui::Context) {
                     |ui| {
                         ui.set_max_size(panel_size);
                         panel_frame.show(ui, |ui| {
-                            ui.set_min_size(egui::vec2(panel_size.x - 20.0, panel_size.y - 20.0));
                             ui.vertical(|ui| {
                                 ui.horizontal(|ui| {
                                     ui.label(
@@ -176,25 +193,13 @@ pub fn draw_translate(ctx: &egui::Context) {
 
                                 let text = STATE.lock().unwrap().input_text.clone();
                                 let mut text_buf = text;
-                                let resp = ui.add_sized(
+                                ui.add_sized(
                                     [ui.available_width(), ui.available_height()],
                                     egui::TextEdit::multiline(&mut text_buf)
                                         .desired_width(f32::INFINITY)
                                         .lock_focus(false),
                                 );
                                 STATE.lock().unwrap().input_text = text_buf.clone();
-
-                                if resp.lost_focus()
-                                    && ui.input(|i| {
-                                        i.key_pressed(egui::Key::Enter) && i.modifiers.ctrl
-                                    })
-                                {
-                                    let (from, to, engine_idx) = {
-                                        let s = STATE.lock().unwrap();
-                                        (s.from_lang.clone(), s.to_lang.clone(), s.engine_index)
-                                    };
-                                    do_translate(&text_buf, &from, &to, engine_idx, ctx);
-                                }
                             });
                         });
                     },
@@ -207,7 +212,6 @@ pub fn draw_translate(ctx: &egui::Context) {
                     |ui| {
                         ui.set_max_size(panel_size);
                         panel_frame.show(ui, |ui| {
-                            ui.set_min_size(egui::vec2(panel_size.x - 20.0, panel_size.y - 20.0));
                             ui.vertical(|ui| {
                                 ui.horizontal(|ui| {
                                     ui.label(
@@ -263,6 +267,7 @@ pub fn draw_translate(ctx: &egui::Context) {
                                         Some(Ok(r)) => {
                                             egui::ScrollArea::vertical()
                                                 .auto_shrink([false; 2])
+                                                .max_width(ui.available_width())
                                                 .show(ui, |ui| {
                                                     ui.label(
                                                         egui::RichText::new(&r.text)

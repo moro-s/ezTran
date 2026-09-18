@@ -442,14 +442,6 @@ pub fn text_loading() -> egui::Color32 {
 }
 
 /// 箭头符号色
-pub fn arrow_color() -> egui::Color32 {
-    if is_light() {
-        egui::Color32::from_gray(140)
-    } else {
-        egui::Color32::from_gray(120)
-    }
-}
-
 /// 快捷键输入框背景色
 pub fn hotkey_input_bg(focused: bool, hovered: bool) -> egui::Color32 {
     if is_light() {
@@ -498,12 +490,12 @@ pub fn history_empty() -> egui::Color32 {
     }
 }
 
-/// 历史弹窗边框色
-pub fn history_border() -> egui::Color32 {
+/// 历史表格交替行背景色
+pub fn history_row_alt() -> egui::Color32 {
     if is_light() {
-        egui::Color32::from_gray(200)
+        egui::Color32::from_gray(245)
     } else {
-        egui::Color32::from_gray(70)
+        egui::Color32::from_gray(45)
     }
 }
 
@@ -522,14 +514,5 @@ pub fn toast_color() -> egui::Color32 {
         egui::Color32::from_rgb(60, 160, 60)
     } else {
         egui::Color32::from_rgb(120, 200, 120)
-    }
-}
-
-/// 置顶按钮遮罩色
-pub fn pin_overlay() -> egui::Color32 {
-    if is_light() {
-        egui::Color32::from_rgba_unmultiplied(60, 60, 60, 40)
-    } else {
-        egui::Color32::from_rgba_unmultiplied(128, 128, 128, 64)
     }
 }

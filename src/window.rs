@@ -269,17 +269,9 @@ const HTCAPTION: usize = 2;
 
 /// 窗口边框命中区域代码
 #[cfg(windows)]
-pub const HTLEFT: usize = 10;
-#[cfg(windows)]
-pub const HTRIGHT: usize = 11;
-#[cfg(windows)]
-pub const HTTOP: usize = 12;
-#[cfg(windows)]
 pub const HTTOPLEFT: usize = 13;
 #[cfg(windows)]
 pub const HTTOPRIGHT: usize = 14;
-#[cfg(windows)]
-pub const HTBOTTOM: usize = 15;
 #[cfg(windows)]
 pub const HTBOTTOMLEFT: usize = 16;
 #[cfg(windows)]

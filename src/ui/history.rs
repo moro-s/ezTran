@@ -2,6 +2,9 @@
 
 use crate::ui::state::STATE;
 
+/// 列宽配置：时间、源文本、译文、引擎、语言
+const COL_WIDTHS: [f32; 5] = [52.0, 200.0, 200.0, 60.0, 64.0];
+
 /// 绘制翻译历史弹窗
 pub fn draw_history(ctx: &egui::Context) {
     let mut open = true;
@@ -11,14 +14,9 @@ pub fn draw_history(ctx: &egui::Context) {
     egui::Window::new("翻译历史")
         .id(egui::Id::new("history_window"))
         .open(&mut open)
-        .resizable(true)
+        .resizable(false)
         .collapsible(false)
-        .default_width(560.0)
-        .default_height(380.0)
-        .min_width(360.0)
-        .min_height(240.0)
-        .max_width(700.0)
-        .max_height(600.0)
+        .fixed_size([660.0, 440.0])
         .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
         .show(ctx, |ui| {
             let count = crate::history::get_all().len();
@@ -47,46 +45,104 @@ pub fn draw_history(ctx: &egui::Context) {
                     .auto_shrink([false; 2])
                     .max_width(ui.available_width())
                     .show(ui, |ui| {
-                        for entry in &history {
-                            let frame = egui::Frame::group(ui.style())
-                                .inner_margin(8.0)
-                                .stroke(egui::Stroke::new(0.5_f32, crate::theme::history_border()));
-                            let resp = frame.show(ui, |ui| {
-                                ui.set_min_width(ui.available_width());
-                                ui.horizontal_top(|ui| {
-                                    ui.label(
-                                        egui::RichText::new(&entry.source)
-                                            .color(crate::theme::text_source()),
-                                    );
-                                    ui.label(
-                                        egui::RichText::new("→")
-                                            .color(crate::theme::arrow_color()),
-                                    );
-                                    ui.label(
-                                        egui::RichText::new(&entry.translated)
-                                            .color(crate::theme::text_translated())
-                                            .strong(),
-                                    );
-                                });
-                                ui.add_space(2.0);
-                                ui.label(
-                                    egui::RichText::new(format!(
-                                        "{} → {} · {} · {}",
-                                        entry.from, entry.to, entry.engine,
-                                        format_timestamp(entry.timestamp)
-                                    ))
-                                    .small()
-                                    .color(crate::theme::history_meta()),
+                        // 表头
+                        ui.horizontal(|ui| {
+                            let headers = ["时间", "源文本", "译文", "引擎", "语言"];
+                            for (i, h) in headers.iter().enumerate() {
+                                ui.add_sized(
+                                    [COL_WIDTHS[i], 0.0],
+                                    egui::Label::new(
+                                        egui::RichText::new(*h)
+                                            .small()
+                                            .color(crate::theme::history_meta()),
+                                    ),
                                 );
-                            });
-                            if resp.response.clicked() {
-                                clicked_entry = Some((
-                                    entry.source.clone(),
-                                    entry.from.clone(),
-                                    entry.to.clone(),
-                                ));
                             }
-                            ui.add_space(2.0);
+                        });
+                        ui.separator();
+
+                        // 数据行
+                        for (row_i, entry) in history.iter().enumerate() {
+                            let frame = if row_i % 2 == 1 {
+                                egui::Frame::none()
+                                    .inner_margin(egui::Margin::symmetric(4.0, 2.0))
+                                    .fill(crate::theme::history_row_alt())
+                            } else {
+                                egui::Frame::none()
+                                    .inner_margin(egui::Margin::symmetric(4.0, 2.0))
+                            };
+
+                            let row = frame.show(ui, |ui| {
+                                ui.horizontal(|ui| {
+                                    let r_time = ui.add_sized(
+                                        [COL_WIDTHS[0], 0.0],
+                                        egui::Label::new(
+                                            egui::RichText::new(format_timestamp(entry.timestamp))
+                                                .small()
+                                                .color(crate::theme::history_meta()),
+                                        )
+                                        .sense(egui::Sense::click()),
+                                    );
+                                    let r_src = ui.add_sized(
+                                        [COL_WIDTHS[1], 0.0],
+                                        egui::Label::new(
+                                            egui::RichText::new(truncate_str(&entry.source, 28))
+                                                .color(crate::theme::text_source()),
+                                        )
+                                        .sense(egui::Sense::click()),
+                                    );
+                                    let r_tr = ui.add_sized(
+                                        [COL_WIDTHS[2], 0.0],
+                                        egui::Label::new(
+                                            egui::RichText::new(truncate_str(&entry.translated, 28))
+                                                .color(crate::theme::text_translated())
+                                                .strong(),
+                                        )
+                                        .sense(egui::Sense::click()),
+                                    );
+                                    let r_engine = ui.add_sized(
+                                        [COL_WIDTHS[3], 0.0],
+                                        egui::Label::new(
+                                            egui::RichText::new(&entry.engine)
+                                                .small()
+                                                .color(crate::theme::history_meta()),
+                                        )
+                                        .sense(egui::Sense::click()),
+                                    );
+                                    let r_lang = ui.add_sized(
+                                        [COL_WIDTHS[4], 0.0],
+                                        egui::Label::new(
+                                            egui::RichText::new(format!("{}→{}", entry.from, entry.to))
+                                                .small()
+                                                .color(crate::theme::history_meta()),
+                                        )
+                                        .sense(egui::Sense::click()),
+                                    );
+
+                                    if r_time.clicked()
+                                        || r_src.clicked()
+                                        || r_tr.clicked()
+                                        || r_engine.clicked()
+                                        || r_lang.clicked()
+                                    {
+                                        clicked_entry = Some((
+                                            entry.source.clone(),
+                                            entry.from.clone(),
+                                            entry.to.clone(),
+                                        ));
+                                    }
+                                });
+                            });
+
+                            // hover 高亮
+                            if row.response.hovered() {
+                                let rect = row.response.rect;
+                                ui.painter().rect_filled(
+                                    rect,
+                                    0.0,
+                                    egui::Color32::from_rgba_unmultiplied(100, 149, 237, 30),
+                                );
+                            }
                         }
                     });
             }
@@ -116,6 +172,18 @@ pub fn draw_history(ctx: &egui::Context) {
         s.from_lang = from;
         s.to_lang = to;
         s.show_history = false;
+    }
+}
+
+/// 按 char 数截断字符串，超出部分用省略号替代
+fn truncate_str(s: &str, max_chars: usize) -> String {
+    let chars: Vec<char> = s.chars().collect();
+    if chars.len() <= max_chars {
+        s.to_string()
+    } else {
+        let mut t: String = chars[..max_chars].iter().collect();
+        t.push('…');
+        t
     }
 }
 

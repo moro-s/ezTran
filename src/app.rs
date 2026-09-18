@@ -387,12 +387,12 @@ fn draw_titlebar_btn_anim(
         let a = ((alpha * 255.0) + hover_boost).min(255.0) as u8;
         ui.painter().rect_filled(
             resp.rect,
-            6.0,
+            0.0,
             egui::Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), a),
         );
     } else if resp.hovered() {
         let c = theme::titlebar_btn_hover();
-        ui.painter().rect_filled(resp.rect, 6.0, c);
+        ui.painter().rect_filled(resp.rect, 0.0, c);
     }
 
     ui.painter().text(
@@ -489,7 +489,7 @@ fn draw_resize_borders(ctx: &egui::Context) {
         // hover 时绘制蓝色边框高亮
         if hovered {
             let highlight = egui::Color32::from_rgb(100, 160, 255);
-            let stroke = egui::Stroke::new(2.0, highlight);
+            let stroke = egui::Stroke::new(2.0_f32, highlight);
             for (start, end) in edges {
                 painter.line_segment([*start, *end], stroke);
             }
