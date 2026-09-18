@@ -241,6 +241,19 @@ pub fn start_drag() {
     }
 }
 
+/// 通过 WM_NCLBUTTONDOWN 让系统接管窗口边框缩放。
+/// `hit` 为命中区域代码（HTLEFT/HTRIGHT/HTTOP/HTBOTTOM 等）。
+pub fn start_resize(hit: usize) {
+    #[cfg(windows)]
+    {
+        let hwnd = find_hwnd();
+        if !hwnd.is_null() {
+            release_capture();
+            send_message(WM_NCLBUTTONDOWN, hit, 0);
+        }
+    }
+}
+
 // ── Win32 FFI 底层 ──
 
 #[cfg(windows)]
@@ -253,6 +266,24 @@ const WM_NCLBUTTONDOWN: u32 = 0xA1;
 const SC_MAXIMIZE: usize = 0xF030;
 #[cfg(windows)]
 const HTCAPTION: usize = 2;
+
+/// 窗口边框命中区域代码
+#[cfg(windows)]
+pub const HTLEFT: usize = 10;
+#[cfg(windows)]
+pub const HTRIGHT: usize = 11;
+#[cfg(windows)]
+pub const HTTOP: usize = 12;
+#[cfg(windows)]
+pub const HTTOPLEFT: usize = 13;
+#[cfg(windows)]
+pub const HTTOPRIGHT: usize = 14;
+#[cfg(windows)]
+pub const HTBOTTOM: usize = 15;
+#[cfg(windows)]
+pub const HTBOTTOMLEFT: usize = 16;
+#[cfg(windows)]
+pub const HTBOTTOMRIGHT: usize = 17;
 
 #[cfg(windows)]
 const SW_MINIMIZE: i32 = 6;

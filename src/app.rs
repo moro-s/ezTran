@@ -151,6 +151,9 @@ impl eframe::App for EzTranApp {
 
         draw_titlebar(ctx);
         ui::draw_translate(ctx);
+
+        // 无边框窗口边框缩放（在所有面板绘制之后，用透明交互区覆盖窗口边缘）
+        draw_resize_borders(ctx);
     }
 
     fn on_exit(&mut self, _gl: Option<&eframe::glow::Context>) {
@@ -339,4 +342,110 @@ fn titlebar_button(
         theme::titlebar_text(),
     );
     resp
+}
+
+/// 绘制无边框窗口的透明缩放边框。
+/// 在窗口四边和四角放置透明交互区，拖拽时通过 WM_NCLBUTTONDOWN 让系统接管缩放。
+fn draw_resize_borders(ctx: &egui::Context) {
+    use crate::window;
+    use egui::Sense;
+
+    let screen = ctx.screen_rect();
+    let b = 6.0; // 边框宽度（像素）
+    let c = 12.0; // 角落尺寸（像素）
+
+    // 最大化时不显示缩放边框
+    if ctx.input(|i| i.viewport().maximized.unwrap_or(false)) {
+        return;
+    }
+
+    egui::Area::new(egui::Id::new("resize_borders"))
+        .order(egui::Order::Foreground)
+        .fixed_pos(screen.min)
+        .interactable(true)
+        .show(ctx, |ui| {
+            ui.set_min_size(screen.size());
+            // ── 四条边 ──
+            // 左边
+            let r = ui.allocate_rect(
+                egui::Rect::from_min_size(screen.min, egui::vec2(b, screen.height())),
+                Sense::drag(),
+            );
+            if r.drag_started() {
+                window::start_resize(window::HTLEFT);
+            }
+            // 右边
+            let r = ui.allocate_rect(
+                egui::Rect::from_min_size(
+                    egui::pos2(screen.right() - b, screen.top()),
+                    egui::vec2(b, screen.height()),
+                ),
+                Sense::drag(),
+            );
+            if r.drag_started() {
+                window::start_resize(window::HTRIGHT);
+            }
+            // 上边
+            let r = ui.allocate_rect(
+                egui::Rect::from_min_size(screen.min, egui::vec2(screen.width(), b)),
+                Sense::drag(),
+            );
+            if r.drag_started() {
+                window::start_resize(window::HTTOP);
+            }
+            // 下边
+            let r = ui.allocate_rect(
+                egui::Rect::from_min_size(
+                    egui::pos2(screen.left(), screen.bottom() - b),
+                    egui::vec2(screen.width(), b),
+                ),
+                Sense::drag(),
+            );
+            if r.drag_started() {
+                window::start_resize(window::HTBOTTOM);
+            }
+
+            // ── 四个角 ──
+            // 左上
+            let r = ui.allocate_rect(
+                egui::Rect::from_min_size(screen.min, egui::vec2(c, c)),
+                Sense::drag(),
+            );
+            if r.drag_started() {
+                window::start_resize(window::HTTOPLEFT);
+            }
+            // 右上
+            let r = ui.allocate_rect(
+                egui::Rect::from_min_size(
+                    egui::pos2(screen.right() - c, screen.top()),
+                    egui::vec2(c, c),
+                ),
+                Sense::drag(),
+            );
+            if r.drag_started() {
+                window::start_resize(window::HTTOPRIGHT);
+            }
+            // 左下
+            let r = ui.allocate_rect(
+                egui::Rect::from_min_size(
+                    egui::pos2(screen.left(), screen.bottom() - c),
+                    egui::vec2(c, c),
+                ),
+                Sense::drag(),
+            );
+            if r.drag_started() {
+                window::start_resize(window::HTBOTTOMLEFT);
+            }
+            // 右下
+            let r = ui.allocate_rect(
+                egui::Rect::from_min_size(
+                    egui::pos2(screen.right() - c, screen.bottom() - c),
+                    egui::vec2(c, c),
+                ),
+                Sense::drag(),
+            );
+            if r.drag_started() {
+                window::start_resize(window::HTBOTTOMRIGHT);
+            }
+        });
 }

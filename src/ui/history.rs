@@ -17,6 +17,8 @@ pub fn draw_history(ctx: &egui::Context) {
         .default_height(380.0)
         .min_width(360.0)
         .min_height(240.0)
+        .max_width(700.0)
+        .max_height(600.0)
         .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
         .show(ctx, |ui| {
             let count = crate::history::get_all().len();
@@ -43,13 +45,15 @@ pub fn draw_history(ctx: &egui::Context) {
             } else {
                 egui::ScrollArea::vertical()
                     .auto_shrink([false; 2])
+                    .max_width(ui.available_width())
                     .show(ui, |ui| {
                         for entry in &history {
                             let frame = egui::Frame::group(ui.style())
                                 .inner_margin(8.0)
                                 .stroke(egui::Stroke::new(0.5_f32, crate::theme::history_border()));
                             let resp = frame.show(ui, |ui| {
-                                ui.horizontal_wrapped(|ui| {
+                                ui.set_min_width(ui.available_width());
+                                ui.horizontal_top(|ui| {
                                     ui.label(
                                         egui::RichText::new(&entry.source)
                                             .color(crate::theme::text_source()),

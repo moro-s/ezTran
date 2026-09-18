@@ -8,9 +8,9 @@ pub fn draw_translate(ctx: &egui::Context) {
     // toast 自动消失（3 秒）
     update_toast(ctx);
 
-    // Esc 键最小化翻译工作台
+    // Esc 键隐藏到托盘
     if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
-        crate::window::minimize_main();
+        crate::window::hide_main();
     }
 
     // 面板背景色 #1E1E1E
