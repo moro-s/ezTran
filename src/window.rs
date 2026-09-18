@@ -47,24 +47,30 @@ pub fn set_ctx(ctx: &egui::Context) {
     *EGUI_CTX.lock().unwrap() = Some(ctx.clone());
 }
 
-/// 唤醒 winit 事件循环（窗口隐藏后 request_repaint 无效，需强制触发 WM_PAINT）
+/// 唤醒 winit 事件循环（窗口隐藏后 request_repaint 无效，需强制触发 WM_PAINT）。
+/// 窗口可见时仅用 request_repaint，避免 force_redraw 导致闪烁。
 pub fn wake() {
     if let Some(ctx) = EGUI_CTX.lock().unwrap().as_ref() {
         ctx.request_repaint();
     }
     #[cfg(windows)]
     {
-        post_message(WM_NULL, 0, 0);
-        force_redraw();
+        if MAIN_HIDDEN.load(Ordering::SeqCst) {
+            post_message(WM_NULL, 0, 0);
+            force_redraw();
+        }
     }
 }
 
-/// 后台守护线程入口：定期唤醒事件循环，防止窗口隐藏后托盘事件无法处理
+/// 后台守护线程入口：仅当主窗口隐藏时定期唤醒事件循环，防止托盘事件无法处理。
+/// 窗口可见时 egui 自身事件循环正常运行，无需外部强制重绘。
 pub fn start_repaint_thread() {
     std::thread::spawn(|| {
         loop {
             std::thread::sleep(std::time::Duration::from_millis(100));
-            wake();
+            if MAIN_HIDDEN.load(Ordering::SeqCst) {
+                wake();
+            }
         }
     });
 }

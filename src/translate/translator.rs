@@ -54,21 +54,26 @@ impl Translator {
         }
 
         // 有道智云 API: https://openapi.youdao.com/api
-        // sign = sha256(appKey + input + salt + appSecret)
+        // v3 签名: sign = sha256(appKey + input + salt + curtime + appSecret)
         // input: q 长度 > 20 时取前10 + 长度 + 后10，否则为 q 本身
         let salt = gen_salt();
+        let curtime = gen_curtime();
         let input = youdao_sign_input(text);
-        let sign_input = format!("{}{}{}{}", engine.api_key, input, salt, engine.api_secret);
+        let sign_input = format!("{}{}{}{}{}", engine.api_key, input, salt, curtime, engine.api_secret);
         let sign = sha256_hex(&sign_input);
-        log::debug!("[translate][youdao] 签名完成: salt={} input_len={} sign_len={}", salt, input.len(), sign.len());
+        log::info!(
+            "[translate][youdao] 签名: salt={} curtime={} input_len={} sign_prefix={}",
+            salt, curtime, input.len(), &sign[..8]
+        );
 
         let url = format!(
-            "https://openapi.youdao.com/api?q={}&from={}&to={}&appKey={}&salt={}&sign={}",
+            "https://openapi.youdao.com/api?q={}&from={}&to={}&appKey={}&salt={}&signType=v3&curtime={}&sign={}",
             url_encode(text),
             from,
             to,
             engine.api_key,
             salt,
+            curtime,
             sign
         );
 
@@ -236,6 +241,15 @@ fn gen_salt() -> String {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_millis())
+        .unwrap_or(0)
+        .to_string()
+}
+
+/// 生成当前时间戳（秒级，用于有道 v1 签名）
+fn gen_curtime() -> String {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs())
         .unwrap_or(0)
         .to_string()
 }
@@ -715,5 +729,83 @@ mod tests {
     fn test_youdao_error_msg_unknown() {
         assert_eq!(youdao_error_msg("999"), "未知错误");
         assert_eq!(youdao_error_msg("abc"), "未知错误");
+    }
+
+    // ── v3 签名逻辑测试 ──
+
+    #[test]
+    fn test_youdao_v3_sign_format() {
+        // v3 签名: sha256(appKey + input + salt + curtime + appSecret)
+        let app_key = "test_key";
+        let q = "hello";
+        let salt = "123456";
+        let curtime = "1700000000";
+        let app_secret = "test_secret";
+        let sign_input = format!("{}{}{}{}{}", app_key, q, salt, curtime, app_secret);
+        assert_eq!(sign_input, "test_keyhello1234561700000000test_secret");
+        let sign = sha256_hex(&sign_input);
+        assert_eq!(sign.len(), 64);
+        assert!(sign.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn test_gen_curtime_is_digits() {
+        let curtime = gen_curtime();
+        assert!(!curtime.is_empty());
+        assert!(curtime.chars().all(|c| c.is_ascii_digit()));
+    }
+
+    #[test]
+    fn test_youdao_v3_sign_with_truncation() {
+        // 长文本 v3 签名: input 使用截断后的值
+        let app_key = "mykey";
+        let text = "abcdefghijklmnopqrstuvwxyz"; // 26 字符
+        let salt = "999";
+        let curtime = "1700000000";
+        let app_secret = "mysecret";
+        let input = youdao_sign_input(text);
+        assert_eq!(input, "abcdefghij26qrstuvwxyz");
+        let sign_input = format!("{}{}{}{}{}", app_key, input, salt, curtime, app_secret);
+        let sign = sha256_hex(&sign_input);
+        assert_eq!(sign.len(), 64);
+    }
+
+    // ── 有道 API 集成测试（需要网络，默认忽略）──
+
+    #[test]
+#[ignore = "需要网络连接和有效的有道 API 密钥，运行: cargo test test_youdao_api_live -- --ignored --nocapture"]
+    fn test_youdao_api_live() {
+        let engine = EngineConfig {
+            kind: EngineKind::Youdao,
+            name: "test".into(),
+            enabled: true,
+            api_key: "4f93c8a4af09ce7f".into(),
+            api_secret: "nDdhiptKZzOOeIKRChIV4wVYKC52T8b3".into(),
+            endpoint: String::new(),
+        };
+        let result = Translator::translate_youdao(&engine, "hello", "en", "zh-CHS");
+        match &result {
+            Ok(r) => println!("[live] 有道翻译成功: text={}", r.text),
+            Err(e) => println!("[live] 有道翻译失败: {}", e),
+        }
+        // 不做严格断言，只观察实际 API 返回
+    }
+
+    #[test]
+#[ignore = "需要网络连接和有效的百度 API 密钥，运行: cargo test test_baidu_api_live -- --ignored --nocapture"]
+    fn test_baidu_api_live() {
+        let engine = EngineConfig {
+            kind: EngineKind::Baidu,
+            name: "test".into(),
+            enabled: true,
+            api_key: "3f950365af0abfbe".into(),
+            api_secret: "nDdhiptKZzOOeIKRChIV4wVYKC52T8b3".into(),
+            endpoint: String::new(),
+        };
+        let result = Translator::translate_baidu(&engine, "hello", "en", "zh");
+        match &result {
+            Ok(r) => println!("[live] 百度翻译成功: text={}", r.text),
+            Err(e) => println!("[live] 百度翻译失败: {}", e),
+        }
     }
 }

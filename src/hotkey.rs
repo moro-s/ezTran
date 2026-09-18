@@ -521,6 +521,11 @@ pub fn hotkey_input(ui: &mut egui::Ui, _id: &str, value: &mut String) {
         egui::Sense::click(),
     );
 
+    // 点击时请求焦点，进入捕获模式
+    if resp.clicked() {
+        resp.request_focus();
+    }
+
     // 显示当前值或占位符
     let display = if value.is_empty() {
         "点击设置快捷键".to_string()
@@ -533,6 +538,10 @@ pub fn hotkey_input(ui: &mut egui::Ui, _id: &str, value: &mut String) {
     let bg = crate::theme::hotkey_input_bg(resp.has_focus(), resp.hovered());
 
     ui.painter().rect_filled(rect, 4.0, bg);
+    // 焦点状态加边框提示
+    if resp.has_focus() {
+        ui.painter().rect_stroke(rect, 4.0, egui::Stroke::new(2.0, crate::theme::text_translated()));
+    }
     ui.painter().text(
         rect.center(),
         egui::Align2::CENTER_CENTER,

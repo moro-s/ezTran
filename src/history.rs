@@ -1,9 +1,10 @@
-//! 翻译历史模块 — 管理最近 50 条翻译记录（内存存储）。
+//! 翻译历史模块 — 管理最近 50 条翻译记录，持久化到磁盘。
 
+use serde::{Deserialize, Serialize};
 use std::sync::LazyLock;
 
 /// 单条翻译历史
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct HistoryEntry {
     /// 源文本
     pub source: String,
@@ -21,11 +22,56 @@ pub struct HistoryEntry {
 
 /// 全局历史列表（最多 50 条，新的在前）
 static HISTORY: LazyLock<std::sync::Mutex<Vec<HistoryEntry>>> =
-    LazyLock::new(|| std::sync::Mutex::new(Vec::new()));
+    LazyLock::new(|| std::sync::Mutex::new(load_from_disk()));
 
 const MAX_HISTORY: usize = 50;
 
-/// 添加一条翻译记录（超限时移除最旧的）
+/// 历史文件路径（与 config.json 同目录）
+fn history_path() -> Option<std::path::PathBuf> {
+    let dir = dirs::config_dir().or_else(|| dirs::home_dir())?;
+    let app_dir = dir.join("eztran");
+    let _ = std::fs::create_dir_all(&app_dir);
+    Some(app_dir.join("history.json"))
+}
+
+/// 从磁盘加载历史记录（文件不存在或解析失败时返回空列表）
+fn load_from_disk() -> Vec<HistoryEntry> {
+    let path = match history_path() {
+        Some(p) => p,
+        None => return Vec::new(),
+    };
+    if !path.exists() {
+        return Vec::new();
+    }
+    match std::fs::read_to_string(&path) {
+        Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
+        Err(e) => {
+            log::warn!("[history] 加载历史记录失败: {}", e);
+            Vec::new()
+        }
+    }
+}
+
+/// 将历史记录保存到磁盘
+fn save_to_disk(history: &[HistoryEntry]) {
+    let path = match history_path() {
+        Some(p) => p,
+        None => {
+            log::warn!("[history] 无法获取历史文件路径");
+            return;
+        }
+    };
+    match serde_json::to_string_pretty(history) {
+        Ok(content) => {
+            if let Err(e) = std::fs::write(&path, content) {
+                log::warn!("[history] 保存历史记录失败: {}", e);
+            }
+        }
+        Err(e) => log::warn!("[history] 序列化历史记录失败: {}", e),
+    }
+}
+
+/// 添加一条翻译记录（超限时移除最旧的），并自动持久化
 pub fn add_entry(source: &str, translated: &str, from: &str, to: &str, engine: &str) {
     let entry = HistoryEntry {
         source: source.to_string(),
@@ -43,6 +89,7 @@ pub fn add_entry(source: &str, translated: &str, from: &str, to: &str, engine: &
     if hist.len() > MAX_HISTORY {
         hist.truncate(MAX_HISTORY);
     }
+    save_to_disk(&hist);
 }
 
 /// 获取所有历史记录的快照
@@ -50,7 +97,10 @@ pub fn get_all() -> Vec<HistoryEntry> {
     HISTORY.lock().unwrap().clone()
 }
 
-/// 清空所有历史
+/// 清空所有历史，并删除磁盘文件
 pub fn clear() {
-    HISTORY.lock().unwrap().clear();
+    let mut hist = HISTORY.lock().unwrap();
+    hist.clear();
+    drop(hist);
+    save_to_disk(&[]);
 }

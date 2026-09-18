@@ -376,19 +376,31 @@ pub(crate) fn do_translate(text: &str, from: &str, to: &str, engine_index: usize
     STATE.lock().unwrap().translating = true;
     ctx.request_repaint();
 
-    let result = Translator::translate(&engine, &text, from, to);
+    // 在子线程中执行翻译，避免阻塞 UI 线程
+    let ctx = ctx.clone();
+    let text_for_history = text.clone();
+    let engine_name = engine.name.clone();
+    let from = from.to_string();
+    let to = to.to_string();
+    std::thread::spawn(move || {
+        let result = Translator::translate(&engine, &text, &from, &to);
 
-    let mut s = STATE.lock().unwrap();
-    s.translating = false;
-    match &result {
-        Ok(r) => {
-            crate::history::add_entry(&text, &r.text, from, to, &engine.name);
-            s.result = Some(Ok(r.clone()));
+        let mut s = STATE.lock().unwrap();
+        s.translating = false;
+        match &result {
+            Ok(r) => {
+                crate::history::add_entry(&text_for_history, &r.text, &from, &to, &engine_name);
+                s.result = Some(Ok(r.clone()));
+            }
+            Err(e) => {
+                s.result = Some(Err(e.to_string()));
+            }
         }
-        Err(e) => {
-            s.result = Some(Err(e.to_string()));
-        }
-    }
+        drop(s);
+
+        // 通知 UI 重绘以显示结果
+        ctx.request_repaint();
+    });
 }
 
 pub(crate) fn show_toast(ctx: &egui::Context, msg: &str) {
