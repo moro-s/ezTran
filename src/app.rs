@@ -49,11 +49,11 @@ impl EzTranApp {
         MenuEvent::set_event_handler(Some(|event: MenuEvent| {
             let id = &event.id;
             if QUIT_MENU_ID.lock().unwrap().as_ref().is_some_and(|qid| id == qid) {
-                log::info!("[tray] 菜单事件: 退出");
+                log::debug!("[tray] 菜单事件: 退出");
                 std::process::exit(0);
             }
             if SETTINGS_MENU_ID.lock().unwrap().as_ref().is_some_and(|sid| id == sid) {
-                log::info!("[tray] 菜单事件: 设置");
+                log::debug!("[tray] 菜单事件: 设置");
                 // 只弹出设置窗口，不恢复翻译工作台
                 ui::show_settings_window();
                 window::wake();
@@ -61,7 +61,7 @@ impl EzTranApp {
                 return;
             }
             if TRANSLATE_MENU_ID.lock().unwrap().as_ref().is_some_and(|tid| id == tid) {
-                log::info!("[tray] 菜单事件: 翻译");
+                log::debug!("[tray] 菜单事件: 翻译");
                 window::show_main_if_hidden();
                 window::wake();
                 return;
@@ -72,7 +72,7 @@ impl EzTranApp {
         // 托盘图标双击 → 显示翻译工作台
         TrayIconEvent::set_event_handler(Some(|event: TrayIconEvent| {
             if let TrayIconEvent::DoubleClick { .. } = event {
-                log::info!("[tray] 图标双击: 显示翻译工作台");
+                log::debug!("[tray] 图标双击: 显示翻译工作台");
                 window::show_main_if_hidden();
                 window::wake();
             }
@@ -96,7 +96,7 @@ impl eframe::App for EzTranApp {
         // 消费全局热键标志
         // 输入翻译：唤起翻译工作台并清空上次内容
         if hotkey::consume_input_translate() {
-            log::info!("[hotkey] 输入翻译快捷键触发 — 唤起工作台");
+            log::debug!("[hotkey] 输入翻译快捷键触发 — 唤起工作台");
             {
                 let mut s = crate::ui::state::STATE.lock().unwrap();
                 s.input_text.clear();
@@ -107,7 +107,7 @@ impl eframe::App for EzTranApp {
         }
         // 划词翻译：获取选中文本 → 显示窗口 → 自动翻译
         if hotkey::consume_selection_translate() {
-            log::info!("[hotkey] 划词翻译快捷键触发");
+            log::debug!("[hotkey] 划词翻译快捷键触发");
             handle_selection_translate(ctx);
         }
 
@@ -178,7 +178,7 @@ fn center_main_window_on_first_launch(ctx: &egui::Context) {
         ((screen_w as f32 - win_w) / 2.0).max(0.0),
         ((screen_h as f32 - win_h) / 2.0).max(0.0),
     );
-    log::info!(
+    log::debug!(
         "[window] 主窗口首次启动居中: pos=({:.0},{:.0}) screen={}x{}",
         pos.x, pos.y, screen_w, screen_h
     );

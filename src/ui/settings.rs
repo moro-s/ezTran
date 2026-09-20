@@ -57,7 +57,7 @@ pub fn draw_settings(ctx: &egui::Context) {
                     ((sw as f32 - win_w) / 2.0).max(0.0),
                     ((sh as f32 - win_h) / 2.0).max(0.0),
                 );
-                log::info!("[settings] 发送居中命令 OuterPosition=({:.0},{:.0}) screen={}x{}", pos.x, pos.y, sw, sh);
+                log::debug!("[settings] 发送居中命令 OuterPosition=({:.0},{:.0}) screen={}x{}", pos.x, pos.y, sw, sh);
                 ui.ctx().send_viewport_cmd(egui::ViewportCommand::OuterPosition(pos));
             }
 

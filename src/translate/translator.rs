@@ -61,7 +61,7 @@ impl Translator {
         let input = youdao_sign_input(text);
         let sign_input = format!("{}{}{}{}{}", engine.api_key, input, salt, curtime, engine.api_secret);
         let sign = sha256_hex(&sign_input);
-        log::info!(
+        log::debug!(
             "[translate][youdao] 签名: salt={} curtime={} input_len={} sign_prefix={}",
             salt, curtime, input.len(), &sign[..8]
         );

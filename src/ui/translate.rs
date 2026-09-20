@@ -56,7 +56,7 @@ static JOB_TX: LazyLock<Sender<TranslateJob>> = LazyLock::new(|| {
                 ctx.request_repaint();
             }
         }
-        log::info!("[translate] worker 线程已退出");
+        log::debug!("[translate] worker 线程已退出");
     });
     tx
 });

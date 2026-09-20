@@ -293,7 +293,7 @@ unsafe fn register_hotkeys() {
             if let Some((mods, vk)) = hotkey_to_win(&hk) {
                 let ret = win::RegisterHotKey(0, win::HOTKEY_ID_INPUT, mods, vk);
                 if ret != 0 {
-                    log::info!(
+                    log::debug!(
                         "[hotkey] 注册输入翻译热键: {} (mods=0x{:X}, vk=0x{:X})",
                         hk.display(), mods, vk
                     );
@@ -313,7 +313,7 @@ unsafe fn register_hotkeys() {
             if let Some((mods, vk)) = hotkey_to_win(&hk) {
                 let ret = win::RegisterHotKey(0, win::HOTKEY_ID_SELECTION, mods, vk);
                 if ret != 0 {
-                    log::info!(
+                    log::debug!(
                         "[hotkey] 注册划词翻译热键: {} (mods=0x{:X}, vk=0x{:X})",
                         hk.display(), mods, vk
                     );
@@ -334,7 +334,7 @@ unsafe fn register_hotkeys() {
 unsafe fn unregister_all() {
     win::UnregisterHotKey(0, win::HOTKEY_ID_INPUT);
     win::UnregisterHotKey(0, win::HOTKEY_ID_SELECTION);
-    log::info!("[hotkey] 已注销所有全局热键");
+    log::debug!("[hotkey] 已注销所有全局热键");
 }
 
 /// 全局热键线程入口
@@ -342,7 +342,7 @@ unsafe fn unregister_all() {
 fn hotkey_thread() {
     let thread_id = unsafe { win::GetCurrentThreadId() };
     HOTKEY_THREAD_ID.store(thread_id, Ordering::SeqCst);
-    log::info!("[hotkey] 全局热键线程已启动 (thread_id={})", thread_id);
+    log::debug!("[hotkey] 全局热键线程已启动 (thread_id={})", thread_id);
 
     unsafe {
         register_hotkeys();
@@ -359,15 +359,15 @@ fn hotkey_thread() {
                     let id = msg.w_param as i32;
                     match id {
                         win::HOTKEY_ID_INPUT => {
-                            log::info!("[hotkey] WM_HOTKEY — 输入翻译");
+                            log::debug!("[hotkey] WM_HOTKEY — 输入翻译");
                             request_input_translate();
                         }
                         win::HOTKEY_ID_SELECTION => {
-                            log::info!("[hotkey] WM_HOTKEY — 划词翻译");
+                            log::debug!("[hotkey] WM_HOTKEY — 划词翻译");
                             // 在热键线程中立即执行模拟复制（此时前台窗口仍是用户选中文本的应用）
                             let text = simulate_copy_and_get_clipboard();
                             if let Some(ref t) = text {
-                                log::info!("[hotkey] 划词翻译 — 已获取选中文本 ({} 字符)", t.len());
+                                log::debug!("[hotkey] 划词翻译 — 已获取选中文本 ({} 字符)", t.len());
                             } else {
                                 log::warn!("[hotkey] 划词翻译 — 未获取到选中文本");
                             }
@@ -380,12 +380,12 @@ fn hotkey_thread() {
                     }
                 }
                 win::WM_USER_REREGISTER => {
-                    log::info!("[hotkey] 收到重新注册信号");
+                    log::debug!("[hotkey] 收到重新注册信号");
                     unregister_all();
                     register_hotkeys();
                 }
                 win::WM_QUIT => {
-                    log::info!("[hotkey] 收到 WM_QUIT，退出线程");
+                    log::debug!("[hotkey] 收到 WM_QUIT，退出线程");
                     break;
                 }
                 _ => {}
@@ -396,7 +396,7 @@ fn hotkey_thread() {
     }
 
     HOTKEY_THREAD_ID.store(0, Ordering::SeqCst);
-    log::info!("[hotkey] 全局热键线程已退出");
+    log::debug!("[hotkey] 全局热键线程已退出");
 }
 
 /// 启动全局热键线程（在 app 初始化时调用一次）
@@ -420,7 +420,7 @@ pub fn reregister_hotkeys() {
             unsafe {
                 win::PostThreadMessageW(tid, win::WM_USER_REREGISTER, 0, 0);
             }
-            log::info!("[hotkey] 已发送重新注册信号到线程 {}", tid);
+            log::debug!("[hotkey] 已发送重新注册信号到线程 {}", tid);
         } else {
             log::warn!("[hotkey] 热键线程未运行，无法重新注册");
         }
@@ -521,7 +521,7 @@ pub fn simulate_copy_and_get_clipboard() -> Option<String> {
     }
 
     if new_text.is_some() {
-        log::info!("[hotkey] 划词翻译 — 已获取选中文本");
+        log::debug!("[hotkey] 划词翻译 — 已获取选中文本");
     } else {
         log::warn!("[hotkey] 划词翻译 — 未获取到选中文本");
     }

@@ -21,6 +21,7 @@ logs/
 
 # 发布产物
 eztran-v*-windows-*.exe
+.release-notes-*.md
 
 # Codegraph
 .codegraph/

@@ -83,7 +83,7 @@ pub fn start_repaint_thread() {
 /// 显示主窗口（从托盘恢复）
 #[allow(dead_code)]
 pub fn show_main() {
-    log::info!("[window] show_main — 恢复主窗口");
+    log::debug!("[window] show_main — 恢复主窗口");
     #[cfg(windows)]
     restore_from_offscreen();
     MAIN_HIDDEN.store(false, Ordering::SeqCst);
@@ -91,7 +91,7 @@ pub fn show_main() {
 
 /// 隐藏主窗口到托盘
 pub fn hide_main() {
-    log::info!("[window] hide_main — 请求隐藏主窗口到托盘");
+    log::debug!("[window] hide_main — 请求隐藏主窗口到托盘");
     PENDING_HIDE.store(true, Ordering::SeqCst);
 }
 
@@ -103,7 +103,7 @@ pub fn is_main_hidden() -> bool {
 /// 如果主窗口处于隐藏状态则恢复（供托盘事件回调调用）
 pub fn show_main_if_hidden() {
     if MAIN_HIDDEN.swap(false, Ordering::SeqCst) {
-        log::info!("[window] show_main_if_hidden — 主窗口已隐藏，恢复中");
+        log::debug!("[window] show_main_if_hidden — 主窗口已隐藏，恢复中");
         #[cfg(windows)]
         restore_from_offscreen();
     } else {
@@ -156,20 +156,20 @@ pub fn bring_to_front() {
             SetForegroundWindow(hwnd);
             BringWindowToTop(hwnd);
         }
-        log::info!("[window] bring_to_front — 已请求置顶 (fg_tid={})", fg_tid);
+        log::debug!("[window] bring_to_front — 已请求置顶 (fg_tid={})", fg_tid);
     }
 }
 
 /// 最小化主窗口
 pub fn minimize_main() {
-    log::info!("[window] minimize_main — 最小化主窗口");
+    log::debug!("[window] minimize_main — 最小化主窗口");
     #[cfg(windows)]
     show_window(SW_MINIMIZE);
 }
 
 /// 最大化/还原主窗口
 pub fn toggle_maximize(maximized: bool) {
-    log::info!("[window] toggle_maximize — maximized={}", maximized);
+    log::debug!("[window] toggle_maximize — maximized={}", maximized);
     #[cfg(windows)]
     {
         if maximized {
@@ -184,7 +184,7 @@ pub fn toggle_maximize(maximized: bool) {
 pub fn toggle_pin() -> bool {
     let new_pinned = !PINNED.load(Ordering::SeqCst);
     PINNED.store(new_pinned, Ordering::SeqCst);
-    log::info!("[window] toggle_pin — 置顶状态切换为 {}", new_pinned);
+    log::debug!("[window] toggle_pin — 置顶状态切换为 {}", new_pinned);
     new_pinned
 }
 
@@ -196,7 +196,7 @@ pub fn is_pinned() -> bool {
 /// Alt+F4 / 关闭按钮 → 隐藏到托盘（在 update 中调用）
 pub fn handle_close_request(ctx: &egui::Context) -> bool {
     if ctx.input(|i| i.viewport().close_requested()) {
-        log::info!("[window] handle_close_request — 收到关闭请求，转为隐藏到托盘");
+        log::debug!("[window] handle_close_request — 收到关闭请求，转为隐藏到托盘");
         ctx.send_viewport_cmd(egui::ViewportCommand::CancelClose);
         if !MAIN_HIDDEN.load(Ordering::SeqCst) {
             PENDING_HIDE.store(true, Ordering::SeqCst);
@@ -209,7 +209,7 @@ pub fn handle_close_request(ctx: &egui::Context) -> bool {
 /// 执行延迟隐藏（在 update 中调用，返回 true 表示已处理）
 pub fn process_pending_hide() -> bool {
     if PENDING_HIDE.swap(false, Ordering::SeqCst) {
-        log::info!("[window] process_pending_hide — 执行隐藏（移屏外）");
+        log::debug!("[window] process_pending_hide — 执行隐藏（移屏外）");
         #[cfg(windows)]
         move_offscreen();
         MAIN_HIDDEN.store(true, Ordering::SeqCst);
@@ -356,7 +356,7 @@ fn move_offscreen() {
             bottom: 0,
         };
         GetWindowRect(hwnd, &mut rect);
-        log::info!(
+        log::debug!(
             "[window] hide — 保存窗口位置 rect=({},{},{},{})",
             rect.left, rect.top, rect.right, rect.bottom
         );
@@ -366,7 +366,7 @@ fn move_offscreen() {
         let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32;
         let new_ex = (ex & !WS_EX_APPWINDOW) | WS_EX_TOOLWINDOW;
         SetWindowLongPtrW(hwnd, GWL_EXSTYLE, new_ex as isize);
-        log::info!("[window] hide — ex_style: 0x{:08X} -> 0x{:08X}", ex, new_ex);
+        log::debug!("[window] hide — ex_style: 0x{:08X} -> 0x{:08X}", ex, new_ex);
 
         // 移到屏幕外（-32000 是 Windows 约定的屏幕外坐标）
         let w = rect.right - rect.left;
@@ -380,7 +380,7 @@ fn move_offscreen() {
             h,
             SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGE,
         );
-        log::info!("[window] hide — 已移至屏幕外 + WS_EX_TOOLWINDOW");
+        log::debug!("[window] hide — 已移至屏幕外 + WS_EX_TOOLWINDOW");
     }
 }
 
@@ -415,7 +415,7 @@ fn restore_from_offscreen() {
         let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE) as u32;
         let new_ex = (ex & !WS_EX_TOOLWINDOW) | WS_EX_APPWINDOW;
         SetWindowLongPtrW(hwnd, GWL_EXSTYLE, new_ex as isize);
-        log::info!("[window] restore — ex_style: 0x{:08X} -> 0x{:08X}", ex, new_ex);
+        log::debug!("[window] restore — ex_style: 0x{:08X} -> 0x{:08X}", ex, new_ex);
 
         // 移回原位置
         if let Some(rect) = *SAVED_RECT.lock().unwrap() {
@@ -430,7 +430,7 @@ fn restore_from_offscreen() {
                 h,
                 SWP_NOZORDER | SWP_NOACTIVATE | SWP_FRAMECHANGE,
             );
-            log::info!(
+            log::debug!(
                 "[window] restore — 恢复至 ({},{},{},{})",
                 rect.left, rect.top, rect.right, rect.bottom
             );
