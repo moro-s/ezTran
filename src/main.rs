@@ -53,7 +53,13 @@ fn init_logger() {
             }
         }
         let config = builder.build();
-        let _ = WriteLogger::init(LevelFilter::Trace, config, file);
+        // debug 构建用 TRACE 方便调试，release 构建用 INFO 减少日志量
+        let log_level = if cfg!(debug_assertions) {
+            LevelFilter::Trace
+        } else {
+            LevelFilter::Info
+        };
+        let _ = WriteLogger::init(log_level, config, file);
         log::info!("========== EzTran 启动 ==========");
         log::info!("日志文件: {}", log_path.display());
 
