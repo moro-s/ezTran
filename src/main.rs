@@ -16,7 +16,6 @@ use config::AppConfig;
 use icon::create_window_icon;
 use simplelog::{ConfigBuilder, LevelFilter, WriteLogger};
 use std::fs::{self, OpenOptions};
-
 /// 日志保留天数
 const LOG_MAX_DAYS: i64 = 7;
 
@@ -42,11 +41,18 @@ fn init_logger() {
 
     if let Ok(file) = file {
         // 只记录 eztran 自身模块的日志，过滤 eframe/egui 等第三方库噪音
-        let config = ConfigBuilder::new()
+        let mut builder = ConfigBuilder::new();
+        builder
             .set_target_level(LevelFilter::Off)
             .set_max_level(LevelFilter::Info)
-            .add_filter_allow_str("eztran")
-            .build();
+            .add_filter_allow_str("eztran");
+        // 时间用本地时区（东八区），失败时兜底 UTC+8
+        if builder.set_time_offset_to_local().is_err() {
+            if let Ok(offset) = time::UtcOffset::from_hms(8, 0, 0) {
+                builder.set_time_offset(offset);
+            }
+        }
+        let config = builder.build();
         let _ = WriteLogger::init(LevelFilter::Trace, config, file);
         log::info!("========== EzTran 启动 ==========");
         log::info!("日志文件: {}", log_path.display());

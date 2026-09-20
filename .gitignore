@@ -17,6 +17,7 @@ Thumbs.db
 # Debug
 debug.log
 eztran.log
+logs/
 
 # 发布产物
 eztran-v*-windows-*.exe
