@@ -1,14 +1,91 @@
 use crate::config::LANGUAGES;
-use crate::translate::Translator;
+use crate::translate::{EngineConfig, TranslateResult, Translator};
 use crate::ui::components::{show_toast, update_toast};
 use crate::ui::state::STATE;
 use egui::TextStyle;
+use std::sync::mpsc::{self, Sender};
+use std::sync::LazyLock;
+
+/// 翻译任务（发送给常驻 worker 线程）
+struct TranslateJob {
+    engine: EngineConfig,
+    text: String,
+    from: String,
+    to: String,
+}
+
+/// 翻译完成消息（回传给 UI 线程）
+enum TranslateDone {
+    Ok(TranslateResult, String, String, String, String),
+    Err(String),
+}
+
+/// 全局翻译任务 channel sender（worker 线程持有 receiver）
+static JOB_TX: LazyLock<Sender<TranslateJob>> = LazyLock::new(|| {
+    let (tx, rx) = mpsc::channel::<TranslateJob>();
+    std::thread::spawn(move || {
+        for job in rx {
+            let engine_name = job.engine.name.clone();
+            let from = job.from.clone();
+            let to = job.to.clone();
+            let text_for_history = job.text.clone();
+            let result = Translator::translate(&job.engine, &job.text, &job.from, &job.to);
+
+            // 兜底：无论成功/失败，都复位 translating 并写入结果
+            let done = match result {
+                Ok(r) => TranslateDone::Ok(r, text_for_history, from, to, engine_name),
+                Err(e) => TranslateDone::Err(e.to_string()),
+            };
+
+            {
+                let mut s = STATE.lock().unwrap();
+                s.translating = false;
+                match done {
+                    TranslateDone::Ok(r, ref text, ref from, ref to, ref engine_name) => {
+                        crate::history::add_entry(text, &r.text, from, to, engine_name);
+                        s.result = Some(Ok(r));
+                    }
+                    TranslateDone::Err(ref msg) => {
+                        s.result = Some(Err(msg.to_string()));
+                    }
+                }
+            }
+
+            // 通知 UI 重绘以显示结果
+            if let Some(ctx) = crate::window::try_ctx() {
+                ctx.request_repaint();
+            }
+        }
+        log::info!("[translate] worker 线程已退出");
+    });
+    tx
+});
 
 /// 绘制翻译工作台
 pub fn draw_translate(ui: &mut egui::Ui) {
     let ctx = ui.ctx().clone();
     // toast 自动消失（3 秒）
     update_toast(&ctx);
+
+    // 一次性取出本帧所需状态快照，避免绘制过程中反复加锁与克隆
+    let (translating, result, input_text, from_lang, to_lang, engine_index, engines) = {
+        let s = STATE.lock().unwrap();
+        (
+            s.translating,
+            s.result.clone(),
+            s.input_text.clone(),
+            s.from_lang.clone(),
+            s.to_lang.clone(),
+            s.engine_index,
+            s.config_edit
+                .engines
+                .engines
+                .iter()
+                .enumerate()
+                .map(|(i, e)| (i, e.name.clone(), e.enabled))
+                .collect::<Vec<(usize, String, bool)>>(),
+        )
+    };
 
     // Esc 键隐藏到托盘
     if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
@@ -18,18 +95,8 @@ pub fn draw_translate(ui: &mut egui::Ui) {
     // Ctrl+Enter 触发翻译（消费事件，防止 multiline 插入换行）
     if ctx.input(|i| i.key_pressed(egui::Key::Enter) && i.modifiers.ctrl) {
         ctx.input_mut(|i| i.consume_key(egui::Modifiers::CTRL, egui::Key::Enter));
-        let translating = STATE.lock().unwrap().translating;
         if !translating {
-            let (text, from, to, engine_idx) = {
-                let s = STATE.lock().unwrap();
-                (
-                    s.input_text.clone(),
-                    s.from_lang.clone(),
-                    s.to_lang.clone(),
-                    s.engine_index,
-                )
-            };
-            do_translate(&text, &from, &to, engine_idx, &ctx);
+            do_translate(&input_text, &from_lang, &to_lang, engine_index, &ctx);
         }
     }
 
@@ -48,18 +115,8 @@ pub fn draw_translate(ui: &mut egui::Ui) {
                 ui.spacing_mut().item_spacing.x = 4.0;
                 ui.spacing_mut().interact_size.y = 26.0;
 
-                // 引擎选择（从翻译服务配置中读取所有引擎）
-                let engines: Vec<(usize, String, bool)> = {
-                    let s = STATE.lock().unwrap();
-                    s.config_edit
-                        .engines
-                        .engines
-                        .iter()
-                        .enumerate()
-                        .map(|(i, e)| (i, e.name.clone(), e.enabled))
-                        .collect()
-                };
-                let mut idx = STATE.lock().unwrap().engine_index;
+                // 引擎选择（使用开头快照的引擎列表）
+                let mut idx = engine_index;
                 let selected_text = engines
                     .iter()
                     .find(|(i, _, _)| *i == idx)
@@ -161,7 +218,6 @@ pub fn draw_translate(ui: &mut egui::Ui) {
                                     ui.with_layout(
                                         egui::Layout::right_to_left(egui::Align::Center),
                                         |ui| {
-                                            let translating = STATE.lock().unwrap().translating;
                                             let btn = egui::Button::new(if translating {
                                                 "翻译中..."
                                             } else {
@@ -194,15 +250,16 @@ pub fn draw_translate(ui: &mut egui::Ui) {
                                     );
                                 });
 
-                                let text = STATE.lock().unwrap().input_text.clone();
-                                let mut text_buf = text;
-                                ui.add_sized(
+                                let mut text_buf = input_text.clone();
+                                let te_resp = ui.add_sized(
                                     [ui.available_width(), ui.available_height()],
                                     egui::TextEdit::multiline(&mut text_buf)
                                         .desired_width(f32::INFINITY)
                                         .lock_focus(false),
                                 );
-                                STATE.lock().unwrap().input_text = text_buf.clone();
+                                if te_resp.changed() {
+                                    STATE.lock().unwrap().input_text = text_buf;
+                                }
                             });
                         });
                     },
@@ -224,10 +281,7 @@ pub fn draw_translate(ui: &mut egui::Ui) {
                                     ui.with_layout(
                                         egui::Layout::right_to_left(egui::Align::Center),
                                         |ui| {
-                                            let has_result = STATE
-                                                .lock()
-                                                .unwrap()
-                                                .result
+                                            let has_result = result
                                                 .as_ref()
                                                 .map(|r| r.is_ok())
                                                 .unwrap_or(false);
@@ -252,9 +306,6 @@ pub fn draw_translate(ui: &mut egui::Ui) {
                                         },
                                     );
                                 });
-
-                                let result = STATE.lock().unwrap().result.clone();
-                                let translating = STATE.lock().unwrap().translating;
 
                                 if translating {
                                     ui.add_space(30.0);
@@ -385,29 +436,17 @@ pub(crate) fn do_translate(text: &str, from: &str, to: &str, engine_index: usize
     STATE.lock().unwrap().translating = true;
     ctx.request_repaint();
 
-    // 在子线程中执行翻译，避免阻塞 UI 线程
-    let ctx = ctx.clone();
-    let text_for_history = text.clone();
-    let engine_name = engine.name.clone();
-    let from = from.to_string();
-    let to = to.to_string();
-    std::thread::spawn(move || {
-        let result = Translator::translate(&engine, &text, &from, &to);
-
+    // 发送给常驻 worker 线程执行（避免每次翻译新建线程）
+    let job = TranslateJob {
+        engine,
+        text,
+        from: from.to_string(),
+        to: to.to_string(),
+    };
+    if JOB_TX.send(job).is_err() {
+        // worker 线程已退出，复位 translating 并报错
         let mut s = STATE.lock().unwrap();
         s.translating = false;
-        match &result {
-            Ok(r) => {
-                crate::history::add_entry(&text_for_history, &r.text, &from, &to, &engine_name);
-                s.result = Some(Ok(r.clone()));
-            }
-            Err(e) => {
-                s.result = Some(Err(e.to_string()));
-            }
-        }
-        drop(s);
-
-        // 通知 UI 重绘以显示结果
-        ctx.request_repaint();
-    });
+        s.result = Some(Err("翻译服务不可用".into()));
+    }
 }

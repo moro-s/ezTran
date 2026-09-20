@@ -18,5 +18,11 @@ Thumbs.db
 debug.log
 eztran.log
 
+# 发布产物
+eztran-v*-windows-*.exe
+
 # Codegraph
 .codegraph/
+
+# BOE AI Coder
+.boecoder-attachments/

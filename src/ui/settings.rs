@@ -237,7 +237,17 @@ fn settings_general(ui: &mut egui::Ui) {
     {
         let auto = STATE.lock().unwrap().config_edit.auto_start;
         let mut auto = auto;
+        let prev = auto;
         ui.checkbox(&mut auto, "开机自启动");
+        if auto != prev {
+            // 变更时同步注册表
+            let ok = crate::autostart::set_enabled(auto);
+            if !ok && auto {
+                // 启用失败，回滚 checkbox 状态
+                auto = false;
+                show_toast(ui.ctx(), "开机自启动设置失败");
+            }
+        }
         STATE.lock().unwrap().config_edit.auto_start = auto;
     }
     ui.add_space(16.0);

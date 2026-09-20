@@ -447,20 +447,30 @@ fn make_key_input(vk: u16, flags: u32) -> win::INPUT {
 }
 
 /// 模拟 Ctrl+C 复制当前选中文本，从剪贴板读取并返回。
-/// 保留用户原有剪贴板内容，操作完成后恢复。
+/// 保留用户原有剪贴板内容（文本或图片），操作完成后恢复。
 ///
 /// 注意：热键触发时用户仍按住修饰键（如 Ctrl+Shift），需要先释放所有修饰键，
 /// 再模拟 Ctrl+C，否则 Shift 会干扰复制操作。
 pub fn simulate_copy_and_get_clipboard() -> Option<String> {
-    // 保存旧剪贴板内容
-    let old_clip = arboard::Clipboard::new()
-        .ok()
-        .and_then(|mut c| c.get_text().ok());
+    // 保存旧剪贴板内容：优先文本，文本为空时尝试图片
+    let mut clipboard = match arboard::Clipboard::new() {
+        Ok(c) => c,
+        Err(e) => {
+            log::warn!("[hotkey] 划词翻译 — 无法打开剪贴板: {}", e);
+            return None;
+        }
+    };
+
+    let old_text = clipboard.get_text().ok().filter(|s| !s.is_empty());
+    let old_image = if old_text.is_none() {
+        clipboard.get_image().ok()
+    } else {
+        None
+    };
+    let had_content = old_text.is_some() || old_image.is_some();
 
     // 清空剪贴板（用于判断 Ctrl+C 是否真的复制了新内容）
-    if let Ok(mut clipboard) = arboard::Clipboard::new() {
-        let _ = clipboard.set_text("");
-    }
+    let _ = clipboard.set_text("");
 
     #[cfg(windows)]
     unsafe {
@@ -496,11 +506,18 @@ pub fn simulate_copy_and_get_clipboard() -> Option<String> {
         .and_then(|mut c| c.get_text().ok())
         .filter(|s| !s.is_empty());
 
-    // 恢复旧剪贴板内容
-    if let Some(ref old) = old_clip {
-        if let Ok(mut clipboard) = arboard::Clipboard::new() {
-            let _ = clipboard.set_text(old);
-        }
+    // 恢复旧剪贴板内容：有新文本时不恢复（让用户复制的新内容留在剪贴板）
+    // 仅当 Ctrl+C 未产生新内容时才恢复原有内容
+    if new_text.is_none() && had_content {
+        let _ = arboard::Clipboard::new().ok().and_then(|mut c| {
+            if let Some(ref text) = old_text {
+                c.set_text(text).ok()
+            } else if let Some(img) = old_image {
+                c.set_image(img).ok()
+            } else {
+                None
+            }
+        });
     }
 
     if new_text.is_some() {

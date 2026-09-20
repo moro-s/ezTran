@@ -47,6 +47,11 @@ pub fn set_ctx(ctx: &egui::Context) {
     *EGUI_CTX.lock().unwrap() = Some(ctx.clone());
 }
 
+/// 尝试获取已注册的 egui Context（供非 UI 线程唤醒重绘用）
+pub fn try_ctx() -> Option<egui::Context> {
+    EGUI_CTX.lock().unwrap().clone()
+}
+
 /// 唤醒 winit 事件循环（窗口隐藏后 request_repaint 无效，需强制触发 WM_PAINT）。
 /// 窗口可见时仅用 request_repaint，避免 force_redraw 导致闪烁。
 pub fn wake() {

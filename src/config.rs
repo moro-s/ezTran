@@ -129,11 +129,14 @@ impl AppConfig {
         }
     }
 
-    /// 保存配置到磁盘
+    /// 保存配置到磁盘（原子写入：先写临时文件再 rename，避免写入中途崩溃损坏文件）
     pub fn save(&self) -> anyhow::Result<()> {
         let path = Self::config_path()?;
         let content = serde_json::to_string_pretty(self)?;
-        std::fs::write(&path, content)?;
+        // 临时文件放在同目录下，确保与目标文件在同一卷上（rename 才能原子生效）
+        let tmp_path = path.with_extension("json.tmp");
+        std::fs::write(&tmp_path, &content)?;
+        std::fs::rename(&tmp_path, &path)?;
         Ok(())
     }
 }

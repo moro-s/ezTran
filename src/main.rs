@@ -1,6 +1,7 @@
 #![windows_subsystem = "windows"]
 
 mod app;
+mod autostart;
 mod config;
 mod history;
 mod hotkey;
@@ -87,6 +88,10 @@ fn main() -> eframe::Result {
     init_logger();
 
     let config = AppConfig::load().unwrap_or_default();
+
+    // 启动时同步开机自启动注册表项与配置一致
+    sync_autostart_on_startup(&config);
+
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([820.0, 520.0])
@@ -101,4 +106,17 @@ fn main() -> eframe::Result {
         options,
         Box::new(move |_cc| Ok(Box::new(EzTranApp::new(config)))),
     )
+}
+
+/// 启动时同步开机自启动注册表项与配置一致
+/// （配置说开但注册表没开 → 补开；配置说关但注册表残留 → 清除）
+fn sync_autostart_on_startup(config: &AppConfig) {
+    let reg_enabled = autostart::is_enabled();
+    if config.auto_start && !reg_enabled {
+        log::info!("[main] 配置已启用开机自启动但注册表缺失，补写注册表");
+        let _ = autostart::enable();
+    } else if !config.auto_start && reg_enabled {
+        log::info!("[main] 配置已禁用开机自启动但注册表残留，清除注册表");
+        let _ = autostart::disable();
+    }
 }

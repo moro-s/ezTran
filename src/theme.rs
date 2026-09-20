@@ -1,3 +1,8 @@
+use std::sync::atomic::AtomicBool;
+
+/// 缓存"当前是否为浅色主题"，由 setup_style 每帧更新，供颜色函数零锁读取
+static EFFECTIVE_LIGHT: AtomicBool = AtomicBool::new(false);
+
 /// 加载字体并注入 egui（仅初始化一次）
 pub fn setup_fonts(ctx: &egui::Context) {
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -89,7 +94,7 @@ fn is_valid_font(data: &[u8]) -> bool {
 /// 设置 egui 主题配色和字号（根据配置动态切换，不再用 Once 锁死）
 pub fn setup_style(ctx: &egui::Context) {
     use std::sync::atomic::{AtomicU16, Ordering};
-    // 高 8 位 = theme_id, 低 8 位 = font_size_id
+    // bit 5+ = theme_id, bit 1-2 = font_size_id, bit 0 = effective_light
     static LAST_KEY: AtomicU16 = AtomicU16::new(0);
 
     let (theme, font_size) = {
@@ -97,23 +102,33 @@ pub fn setup_style(ctx: &egui::Context) {
         (s.config_edit.theme.clone(), s.config_edit.font_size.clone())
     };
 
-    let theme_id: u8 = match theme {
+    // 计算有效浅色状态：System 时读取系统实际深浅模式
+    let effective_light = match theme {
+        crate::config::AppTheme::Light => true,
+        crate::config::AppTheme::Dark => false,
+        crate::config::AppTheme::System => system_is_light(),
+    };
+    // 更新颜色缓存（供 is_light 零锁读取）
+    EFFECTIVE_LIGHT.store(effective_light, Ordering::Relaxed);
+
+    let theme_id: u16 = match theme {
         crate::config::AppTheme::Dark => 1,
         crate::config::AppTheme::Light => 2,
         crate::config::AppTheme::System => 3,
     };
-    let font_id: u8 = match font_size {
+    let font_id: u16 = match font_size {
         crate::config::FontSize::Small => 1,
         crate::config::FontSize::Standard => 2,
         crate::config::FontSize::Large => 3,
     };
-    let key = ((theme_id as u16) << 8) | (font_id as u16);
+    let light_bit: u16 = if effective_light { 1 } else { 0 };
+    let key = (theme_id << 5) | (font_id << 1) | light_bit;
 
-    // 主题和字号都未变化则跳过（避免每帧重复设置）
-    if LAST_KEY.load(Ordering::SeqCst) == key {
+    // 主题/字号/系统深浅都未变化则跳过（避免每帧重复设置）
+    if LAST_KEY.load(Ordering::Relaxed) == key {
         return;
     }
-    LAST_KEY.store(key, Ordering::SeqCst);
+    LAST_KEY.store(key, Ordering::Relaxed);
 
     let base_size = font_size.size();
 
@@ -140,13 +155,14 @@ pub fn setup_style(ctx: &egui::Context) {
     .into();
     ctx.set_style_of(current_theme, style);
 
-    let mut vis = match theme {
-        crate::config::AppTheme::Light => egui::Visuals::light(),
-        _ => egui::Visuals::dark(),
+    let mut vis = if effective_light {
+        egui::Visuals::light()
+    } else {
+        egui::Visuals::dark()
     };
 
     // 深色主题自定义配色
-    if !matches!(theme, crate::config::AppTheme::Light) {
+    if !effective_light {
         vis.panel_fill = egui::Color32::from_rgb(43, 43, 43);
         vis.window_fill = egui::Color32::from_rgb(30, 30, 30);
         vis.widgets.noninteractive.bg_fill = egui::Color32::from_rgb(43, 43, 43);
@@ -180,10 +196,80 @@ pub fn setup_style(ctx: &egui::Context) {
 
 // ── 主题感知颜色 ──
 
-/// 当前是否为浅色主题
+/// 当前是否为浅色主题（读取 setup_style 维护的缓存，零锁）
 fn is_light() -> bool {
-    let theme = crate::ui::state::STATE.lock().unwrap().config_edit.theme.clone();
-    matches!(theme, crate::config::AppTheme::Light)
+    EFFECTIVE_LIGHT.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// 检测系统当前是否为浅色模式（读取注册表 AppsUseLightTheme）
+#[cfg(windows)]
+fn system_is_light() -> bool {
+    use std::ffi::c_void;
+    extern "system" {
+        fn RegOpenKeyExW(
+            hkey: *mut c_void,
+            lpsubkey: *const u16,
+            reserved: u32,
+            samdesired: u32,
+            phkresult: *mut *mut c_void,
+        ) -> i32;
+        fn RegQueryValueExW(
+            hkey: *mut c_void,
+            lpvaluename: *const u16,
+            lpreserved: *const u32,
+            lptype: *mut u32,
+            lpdata: *mut u8,
+            lpcbdata: *mut u32,
+        ) -> i32;
+        fn RegCloseKey(hkey: *mut c_void) -> i32;
+    }
+    const HKEY_CURRENT_USER: usize = 0x80000001;
+    const KEY_READ: u32 = 0x20019;
+    const REG_DWORD: u32 = 4;
+
+    let subkey: Vec<u16> = "Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize"
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
+    let value: Vec<u16> = "AppsUseLightTheme"
+        .encode_utf16()
+        .chain(std::iter::once(0))
+        .collect();
+
+    let mut hkey: *mut c_void = std::ptr::null_mut();
+    let rc = unsafe {
+        RegOpenKeyExW(
+            HKEY_CURRENT_USER as *mut c_void,
+            subkey.as_ptr(),
+            0,
+            KEY_READ,
+            &mut hkey,
+        )
+    };
+    if rc != 0 || hkey.is_null() {
+        return false;
+    }
+    let mut data: u32 = 0;
+    let mut len: u32 = 4;
+    let mut kind: u32 = 0;
+    let rc = unsafe {
+        RegQueryValueExW(
+            hkey,
+            value.as_ptr(),
+            std::ptr::null(),
+            &mut kind,
+            &mut data as *mut u32 as *mut u8,
+            &mut len,
+        )
+    };
+    unsafe { RegCloseKey(hkey) };
+    rc == 0 && kind == REG_DWORD && data != 0
+}
+
+/// 非 Windows 平台默认深色
+#[cfg(not(windows))]
+fn system_is_light() -> bool {
+    false
 }
 
 /// 标题栏背景色

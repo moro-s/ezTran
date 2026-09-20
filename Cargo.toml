@@ -1,6 +1,6 @@
 [package]
 name = "eztran"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = "A lightweight desktop translation tool built with egui"
 

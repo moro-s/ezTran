@@ -52,7 +52,7 @@ fn load_from_disk() -> Vec<HistoryEntry> {
     }
 }
 
-/// 将历史记录保存到磁盘
+/// 将历史记录保存到磁盘（原子写入：先写临时文件再 rename）
 fn save_to_disk(history: &[HistoryEntry]) {
     let path = match history_path() {
         Some(p) => p,
@@ -63,8 +63,15 @@ fn save_to_disk(history: &[HistoryEntry]) {
     };
     match serde_json::to_string_pretty(history) {
         Ok(content) => {
-            if let Err(e) = std::fs::write(&path, content) {
-                log::warn!("[history] 保存历史记录失败: {}", e);
+            let tmp_path = path.with_extension("json.tmp");
+            if let Err(e) = std::fs::write(&tmp_path, &content) {
+                log::warn!("[history] 写入临时文件失败: {}", e);
+                return;
+            }
+            if let Err(e) = std::fs::rename(&tmp_path, &path) {
+                // rename 失败时尝试直接写入作为兜底
+                log::warn!("[history] rename 失败: {}, 尝试直接写入", e);
+                let _ = std::fs::write(&path, &content);
             }
         }
         Err(e) => log::warn!("[history] 序列化历史记录失败: {}", e),
@@ -84,12 +91,16 @@ pub fn add_entry(source: &str, translated: &str, from: &str, to: &str, engine: &
             .map(|d| d.as_secs())
             .unwrap_or(0),
     };
-    let mut hist = HISTORY.lock().unwrap();
-    hist.insert(0, entry);
-    if hist.len() > MAX_HISTORY {
-        hist.truncate(MAX_HISTORY);
-    }
-    save_to_disk(&hist);
+    // 锁内只改内存，锁外做磁盘 IO（避免持久化期间阻塞 get_all 等读取）
+    let snapshot = {
+        let mut hist = HISTORY.lock().unwrap();
+        hist.insert(0, entry);
+        if hist.len() > MAX_HISTORY {
+            hist.truncate(MAX_HISTORY);
+        }
+        hist.clone()
+    };
+    save_to_disk(&snapshot);
 }
 
 /// 获取所有历史记录的快照
@@ -99,8 +110,9 @@ pub fn get_all() -> Vec<HistoryEntry> {
 
 /// 清空所有历史，并删除磁盘文件
 pub fn clear() {
-    let mut hist = HISTORY.lock().unwrap();
-    hist.clear();
-    drop(hist);
+    {
+        let mut hist = HISTORY.lock().unwrap();
+        hist.clear();
+    }
     save_to_disk(&[]);
 }

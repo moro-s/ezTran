@@ -359,9 +359,12 @@ fn baidu_check_error(resp: &serde_json::Value) -> Option<String> {
 // ── HTTP 工具函数（基于 minreq）──
 // 所有错误信息均不含 URL 或密钥等敏感信息
 
+/// HTTP 请求超时时间（秒）
+const HTTP_TIMEOUT_SECS: u64 = 15;
+
 fn http_get_json(url: &str, context: &str) -> anyhow::Result<serde_json::Value> {
     log::debug!("[http] {} 发送 GET 请求", context);
-    let response = minreq::get(url).send()?;
+    let response = minreq::get(url).with_timeout(HTTP_TIMEOUT_SECS).send()?;
     let status = response.status_code;
     let body = response.as_str().unwrap_or("").to_string();
     log::debug!("[http] {} 响应: status={} body_len={}", context, status, body.len());
@@ -382,6 +385,7 @@ fn http_get_json_with_auth(
     log::debug!("[http] {} 发送 GET 请求 (auth={})", context, auth_prefix);
     let response = minreq::get(url)
         .with_header("Authorization", format!("{} {}", auth_prefix, api_key))
+        .with_timeout(HTTP_TIMEOUT_SECS)
         .send()?;
     let status = response.status_code;
     let body = response.as_str().unwrap_or("").to_string();
@@ -405,7 +409,7 @@ fn http_get_json_with_auth_opt(
     if has_auth {
         req = req.with_header("Authorization", format!("Bearer {}", api_key));
     }
-    let response = req.send()?;
+    let response = req.with_timeout(HTTP_TIMEOUT_SECS).send()?;
     let status = response.status_code;
     let body = response.as_str().unwrap_or("").to_string();
     log::debug!("[http] {} 响应: status={} body_len={}", context, status, body.len());
